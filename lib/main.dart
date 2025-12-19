@@ -3,6 +3,7 @@
 // Copyright (c) 2018 Felix Angelov.
 // You can find the original at https://github.com/felangel/bloc.
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
@@ -18,9 +19,11 @@ void main() async {
 
     // 2. Initialisation du stockage local pour HydratedBloc
     final storage = await HydratedStorage.build(
-      storageDirectory: HydratedStorageDirectory(
-        (await getApplicationDocumentsDirectory()).path,
-      ),
+      storageDirectory: kIsWeb
+          ? HydratedStorageDirectory.web
+          : HydratedStorageDirectory(
+              (await getApplicationDocumentsDirectory()).path,
+            ),
     );
     print('HydratedStorage initialized');
 

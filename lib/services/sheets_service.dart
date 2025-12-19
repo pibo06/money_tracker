@@ -527,7 +527,7 @@ class SheetsService {
   Future<AppConfig?> fetchGlobalConfig() async {
     if (_sheetsApi == null) return null;
 
-    const configSheetName = '_config';
+    const configSheetName = '_Config';
 
     try {
       // 1. Vérifier si la feuille existe
@@ -537,7 +537,8 @@ class SheetsService {
       if (sheetsList != null) {
         exists = sheetsList.any((s) => s.properties?.title == configSheetName);
       }
-
+      print("recherche de $configSheetName");
+      print(exists);
       if (!exists) {
         print(
           'Feuille $configSheetName inexistante. Utilisation des défauts locaux.',
