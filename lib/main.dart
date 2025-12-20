@@ -33,9 +33,8 @@ void main() async {
 
     // 4. Lancement de l'application
     runApp(const MoneyTrackerApp());
-  } catch (e, stackTrace) {
+  } catch (e) {
     // print('Error during startup: $e');
-    // print(stackTrace);
   }
 }
 

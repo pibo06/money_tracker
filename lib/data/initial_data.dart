@@ -6,14 +6,38 @@ import '../models/typemouvement.dart';
 
 List<TypeMouvement> getDefaultTypesMouvements() {
   return [
-    TypeMouvement(code: 'REP', libelle: 'Repas & Boissons'),
-    TypeMouvement(code: 'SNA', libelle: 'Snacks'),
-    TypeMouvement(code: 'TRP', libelle: 'Transport Local'),
-    TypeMouvement(code: 'DIV', libelle: 'Divertissement & Loisirs'),
-    TypeMouvement(code: 'VOL', libelle: 'Vols & Billets'),
-    TypeMouvement(code: 'LOG', libelle: 'Hôtels et logements'),
-    TypeMouvement(code: 'TRF', libelle: 'Transfert Interne'),
-    TypeMouvement(code: 'AUT', libelle: 'Autres dépenses'),
+    TypeMouvement(
+      code: 'REP',
+      libelle: 'Repas & Boissons',
+      iconName: 'restaurant',
+    ),
+    TypeMouvement(code: 'SNA', libelle: 'Snacks', iconName: 'fastfood'),
+    TypeMouvement(
+      code: 'TRP',
+      libelle: 'Transport Local',
+      iconName: 'directions_bus',
+    ),
+    TypeMouvement(
+      code: 'DIV',
+      libelle: 'Divertissement & Loisirs',
+      iconName: 'movie',
+    ),
+    TypeMouvement(code: 'VOL', libelle: 'Vols & Billets', iconName: 'flight'),
+    TypeMouvement(
+      code: 'LOG',
+      libelle: 'Hôtels et logements',
+      iconName: 'hotel',
+    ),
+    TypeMouvement(
+      code: 'TRF',
+      libelle: 'Transfert Interne',
+      iconName: 'swap_horiz',
+    ),
+    TypeMouvement(
+      code: 'AUT',
+      libelle: 'Autres dépenses',
+      iconName: 'category',
+    ),
   ];
 }
 

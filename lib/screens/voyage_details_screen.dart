@@ -8,6 +8,7 @@ import 'package:money_tracker/blocs/voyage_cubit.dart';
 import 'package:money_tracker/screens/nouveau_mouvement_screen.dart';
 import 'package:money_tracker/screens/nouveau_transfert_screen.dart';
 import 'package:money_tracker/screens/voyage_settings_screen.dart';
+import 'package:money_tracker/utils/icon_helpers.dart';
 import 'package:intl/intl.dart';
 
 class VoyageDetailsScreen extends StatefulWidget {
@@ -385,9 +386,33 @@ class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          entry.key,
-                          style: const TextStyle(fontWeight: FontWeight.w500),
+                        Row(
+                          children: [
+                            if (voyage.typesMouvements
+                                    .firstWhere((t) => t.libelle == entry.key)
+                                    .iconName !=
+                                null)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: Icon(
+                                  IconHelpers.getIcon(
+                                    voyage.typesMouvements
+                                        .firstWhere(
+                                          (t) => t.libelle == entry.key,
+                                        )
+                                        .iconName,
+                                  ),
+                                  size: 16,
+                                  color: Colors.grey[700],
+                                ),
+                              ),
+                            Text(
+                              entry.key,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
                         Text(
                           '${avg.toStringAsFixed(2)} ${voyage.devisePrincipale}/j',
@@ -666,14 +691,23 @@ class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
                     : (isExpense
                           ? Colors.red.withValues(alpha: 0.1)
                           : Colors.green.withValues(alpha: 0.1)),
-                child: Icon(
-                  mouvement.estMarqueSupprimer
-                      ? Icons.delete_forever
-                      : (isExpense ? Icons.arrow_downward : Icons.arrow_upward),
-                  color: mouvement.estMarqueSupprimer
-                      ? Colors.white
-                      : (isExpense ? Colors.red : Colors.green),
-                ),
+                child: mouvement.typeMouvement.iconName != null
+                    ? Icon(
+                        IconHelpers.getIcon(mouvement.typeMouvement.iconName),
+                        color: mouvement.estMarqueSupprimer
+                            ? Colors.white
+                            : (isExpense ? Colors.red : Colors.green),
+                        size: 20,
+                      )
+                    : Text(
+                        mouvement.typeMouvement.code.substring(0, 1),
+                        style: TextStyle(
+                          color: mouvement.estMarqueSupprimer
+                              ? Colors.white
+                              : (isExpense ? Colors.red : Colors.green),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
               ),
               title: Text(
                 mouvement.libelle,
@@ -816,7 +850,16 @@ class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
               .toString(),
     );
     DateTime selectedDate = mouvement.date;
-    TypeMouvement? selectedType = mouvement.typeMouvement;
+
+    // Fix: Find the matching type in the current voyage config to ensure equality (handling iconName changes)
+    TypeMouvement? selectedType;
+    try {
+      selectedType = voyage.typesMouvements.firstWhere(
+        (t) => t.code == mouvement.typeMouvement.code,
+      );
+    } catch (_) {
+      selectedType = mouvement.typeMouvement;
+    }
 
     showDialog(
       context: context,

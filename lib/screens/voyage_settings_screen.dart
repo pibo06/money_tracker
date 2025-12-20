@@ -6,6 +6,7 @@ import 'package:money_tracker/models/portefeuille.dart';
 import 'package:money_tracker/models/modepaiement.dart';
 import 'package:money_tracker/blocs/voyage_cubit.dart';
 import 'package:intl/intl.dart';
+import 'package:money_tracker/utils/icon_helpers.dart';
 
 class VoyageSettingsScreen extends StatefulWidget {
   final Voyage voyage;
@@ -122,15 +123,59 @@ class _VoyageSettingsScreenState extends State<VoyageSettingsScreen>
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
+              onPressed: () => _retirerVoyageLocalement(context, voyage),
+              icon: const Icon(Icons.close),
+              label: const Text('Retirer de l\'appareil (Garder sur Cloud)'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange[50],
+                foregroundColor: Colors.orange[800],
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
               onPressed: () => _deleteVoyage(context, voyage),
               icon: const Icon(Icons.delete),
-              label: const Text('Supprimer le voyage'),
+              label: const Text('Supprimer DÉFINITIVEMENT'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red[50],
                 foregroundColor: Colors.red,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _retirerVoyageLocalement(BuildContext context, Voyage voyage) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Retirer le voyage'),
+        content: const Text(
+          'Voulez-vous retirer ce voyage de cet appareil ?\n\n'
+          'Les données seront CONSERVÉES sur Google Sheets et pourront être réimportées plus tard.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annuler'),
+          ),
+          TextButton(
+            onPressed: () {
+              context.read<VoyageCubit>().retirerVoyageLocalement(voyage);
+              // Pop dialog
+              Navigator.pop(context);
+              // Return to Home (pop Settings, pop Details)
+              Navigator.of(context).popUntil((route) => route.isFirst);
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.orange),
+            child: const Text('Retirer'),
           ),
         ],
       ),
@@ -435,47 +480,73 @@ class _VoyageSettingsScreenState extends State<VoyageSettingsScreen>
   void _addPaymentMethod(BuildContext context, Voyage voyage) {
     final codeController = TextEditingController();
     final libelleController = TextEditingController();
+    String? selectedIconName;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Ajouter une catégorie'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: codeController,
-              decoration: const InputDecoration(labelText: 'Code (ex: REST)'),
-              textCapitalization: TextCapitalization.characters,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: libelleController,
-              decoration: const InputDecoration(
-                labelText: 'Libellé (ex: Restaurant)',
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Ajouter une catégorie'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: codeController,
+                decoration: const InputDecoration(labelText: 'Code (ex: REST)'),
+                textCapitalization: TextCapitalization.characters,
               ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: libelleController,
+                decoration: const InputDecoration(
+                  labelText: 'Libellé (ex: Restaurant)',
+                ),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: selectedIconName,
+                decoration: const InputDecoration(
+                  labelText: 'Icône',
+                  border: OutlineInputBorder(),
+                ),
+                items: IconHelpers.iconMap.keys.map((name) {
+                  return DropdownMenuItem(
+                    value: name,
+                    child: Row(
+                      children: [
+                        Icon(IconHelpers.iconMap[name]),
+                        const SizedBox(width: 10),
+                        Text(name),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                onChanged: (val) => setState(() => selectedIconName = val),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annuler'),
+            ),
+            TextButton(
+              onPressed: () {
+                if (codeController.text.isNotEmpty &&
+                    libelleController.text.isNotEmpty) {
+                  final newType = TypeMouvement(
+                    code: codeController.text.toUpperCase(),
+                    libelle: libelleController.text,
+                    iconName: selectedIconName,
+                  );
+                  context.read<VoyageCubit>().addTypeMouvement(voyage, newType);
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('Ajouter'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (codeController.text.isNotEmpty &&
-                  libelleController.text.isNotEmpty) {
-                final newType = TypeMouvement(
-                  code: codeController.text.toUpperCase(),
-                  libelle: libelleController.text,
-                );
-                context.read<VoyageCubit>().addTypeMouvement(voyage, newType);
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Ajouter'),
-          ),
-        ],
       ),
     );
   }
@@ -486,37 +557,68 @@ class _VoyageSettingsScreenState extends State<VoyageSettingsScreen>
     TypeMouvement type,
   ) {
     final libelleController = TextEditingController(text: type.libelle);
+    String? selectedIconName = type.iconName;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Modifier la catégorie'),
-        content: TextField(
-          controller: libelleController,
-          decoration: const InputDecoration(labelText: 'Libellé'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Modifier la catégorie'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: libelleController,
+                decoration: const InputDecoration(labelText: 'Libellé'),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: selectedIconName,
+                decoration: const InputDecoration(
+                  labelText: 'Icône',
+                  border: OutlineInputBorder(),
+                ),
+                items: IconHelpers.iconMap.keys.map((name) {
+                  return DropdownMenuItem(
+                    value: name,
+                    child: Row(
+                      children: [
+                        Icon(IconHelpers.iconMap[name]),
+                        const SizedBox(width: 10),
+                        Text(name),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                onChanged: (val) => setState(() => selectedIconName = val),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annuler'),
+            ),
+            TextButton(
+              onPressed: () {
+                if (libelleController.text.isNotEmpty) {
+                  final newType = TypeMouvement(
+                    code: type.code,
+                    libelle: libelleController.text,
+                    iconName: selectedIconName,
+                  );
+                  context.read<VoyageCubit>().updateTypeMouvement(
+                    voyage,
+                    type,
+                    newType,
+                  );
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('Enregistrer'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (libelleController.text.isNotEmpty) {
-                final newType = TypeMouvement(
-                  code: type.code,
-                  libelle: libelleController.text,
-                );
-                context.read<VoyageCubit>().updateTypeMouvement(
-                  voyage,
-                  type,
-                  newType,
-                );
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Enregistrer'),
-          ),
-        ],
       ),
     );
   }

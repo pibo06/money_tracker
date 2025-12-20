@@ -75,6 +75,16 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
     emit(state.copyWith(voyages: nouvelleListeVoyages));
   }
 
+  void retirerVoyageLocalement(Voyage voyageARetirer) {
+    // Supprime uniquement de la liste locale, sans action sur le Sheet
+    final nouvelleListeVoyages = state.voyages
+        .where(
+          (v) => v.nom != voyageARetirer.nom,
+        ) // Compare names just in case instances differ
+        .toList();
+    emit(state.copyWith(voyages: nouvelleListeVoyages));
+  }
+
   // --- Gestion des Informations du Voyage ---
 
   void updateVoyageInfo(
@@ -111,7 +121,10 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
 
     final nouveauxTypes = List<TypeMouvement>.from(voyage.typesMouvements)
       ..add(type);
-    final voyageMisAJour = voyage.copyWith(typesMouvements: nouveauxTypes);
+    final voyageMisAJour = voyage.copyWith(
+      typesMouvements: nouveauxTypes,
+      configUpdatedAt: DateTime.now(),
+    );
 
     final nouvelleListeVoyages = List<Voyage>.from(state.voyages);
     nouvelleListeVoyages[indexVoyage] = voyageMisAJour;
@@ -133,7 +146,10 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
 
     final nouveauxTypes = List<TypeMouvement>.from(voyage.typesMouvements);
     nouveauxTypes[indexType] = newType;
-    final voyageMisAJour = voyage.copyWith(typesMouvements: nouveauxTypes);
+    final voyageMisAJour = voyage.copyWith(
+      typesMouvements: nouveauxTypes,
+      configUpdatedAt: DateTime.now(),
+    );
 
     final nouvelleListeVoyages = List<Voyage>.from(state.voyages);
     nouvelleListeVoyages[indexVoyage] = voyageMisAJour;
@@ -147,7 +163,10 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
     final nouveauxTypes = voyage.typesMouvements
         .where((t) => t.code != type.code)
         .toList();
-    final voyageMisAJour = voyage.copyWith(typesMouvements: nouveauxTypes);
+    final voyageMisAJour = voyage.copyWith(
+      typesMouvements: nouveauxTypes,
+      configUpdatedAt: DateTime.now(),
+    );
 
     final nouvelleListeVoyages = List<Voyage>.from(state.voyages);
     nouvelleListeVoyages[indexVoyage] = voyageMisAJour;
@@ -164,6 +183,7 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
       ..add(portefeuille);
     final voyageMisAJour = voyage.copyWith(
       portefeuilles: nouveauxPortefeuilles,
+      configUpdatedAt: DateTime.now(),
     );
 
     final nouvelleListeVoyages = List<Voyage>.from(state.voyages);
@@ -188,6 +208,7 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
     nouveauxPortefeuilles[indexPortefeuille] = newPortefeuille;
     final voyageMisAJour = voyage.copyWith(
       portefeuilles: nouveauxPortefeuilles,
+      configUpdatedAt: DateTime.now(),
     );
 
     final nouvelleListeVoyages = List<Voyage>.from(state.voyages);
@@ -204,6 +225,7 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
         .toList();
     final voyageMisAJour = voyage.copyWith(
       portefeuilles: nouveauxPortefeuilles,
+      configUpdatedAt: DateTime.now(),
     );
 
     final nouvelleListeVoyages = List<Voyage>.from(state.voyages);
@@ -517,9 +539,47 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
   Future<bool> synchroniserVoyage(Voyage voyage) async {
     final String sheetName = voyage.nom.replaceAll(' ', '_');
 
+    // 0. Config Sync (Global Timestamp Check)
+    // ---------------------------------------------------------
+    Voyage voyageEnCours = voyage;
+    try {
+      final AppConfig? remoteConfig = await _sheetsService.fetchGlobalConfig();
+      if (remoteConfig != null && remoteConfig.lastUpdated != null) {
+        final DateTime remoteTime = remoteConfig.lastUpdated!;
+        final DateTime localTime = voyage.configUpdatedAt;
+
+        // Tolerance de 1s pour éviter les boucles infinies ou conflits mineurs
+        // Si Remote > Local : On écrase Local
+        if (remoteTime.isAfter(localTime)) {
+          // print('Sync Config: Remote ($remoteTime) > Local ($localTime). Pulling...');
+          voyageEnCours = voyageEnCours.copyWith(
+            portefeuilles: remoteConfig.defaultPortefeuilles,
+            typesMouvements: remoteConfig.defaultTypesMouvements,
+            configUpdatedAt: remoteTime,
+          );
+          // On met à jour l'état local immédiatement pour que l'UI reflète la nouvelle config
+          // avant même de traiter les mouvements
+          // Cependant, on ne push pas tout de suite, on attend la fin de la méthode si besoin ?
+          // Non, il faut le faire maintenant sinon le fetchMouvements va utiliser les anciens portefeuilles pour mapping ?
+          // fetchMouvements utilise le voyage passé en paramètre ? Oui.
+          // Mais 'fetchMouvements' se base sur les noms de feuilles, pas trop sur les portefeuilles.
+        }
+        // Si Local > Remote : On Push Local
+        else if (localTime.isAfter(remoteTime)) {
+          // print('Sync Config: Local ($localTime) > Remote ($remoteTime). Pushing...');
+          await _sheetsService.syncVoyageConfig(voyageEnCours);
+        }
+      } else if (remoteConfig == null) {
+        // Pas de config remote ? On push la nôtre.
+        await _sheetsService.syncVoyageConfig(voyageEnCours);
+      }
+    } catch (e) {
+      // print('Erreur Sync Config: $e');
+    }
+
     // 1. Fetch Remote Movements (Server Truth)
     final List<Mouvement> remoteMouvements = await _sheetsService
-        .fetchMouvements(voyage, sheetName);
+        .fetchMouvements(voyageEnCours, sheetName);
     // print(
     //   'Synchronisation: Récupéré ${remoteMouvements.length} mouvements distants.',
     // );
@@ -532,13 +592,13 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
 
     // On prépare la nouvelle liste de mouvements par portefeuille
     final Map<String, List<Mouvement>> mergedPortefeuilles = {
-      for (var p in voyage.portefeuilles) p.libelle: [],
+      for (var p in voyageEnCours.portefeuilles) p.libelle: [],
     };
 
     final Set<String> processedDates = {};
 
     // PASS 1: Traiter les mouvements LOCAUX
-    for (var p in voyage.portefeuilles) {
+    for (var p in voyageEnCours.portefeuilles) {
       for (var localM in p.mouvements) {
         final dateKey = localM.date.toIso8601String();
         processedDates.add(dateKey);

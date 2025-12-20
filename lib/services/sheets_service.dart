@@ -610,6 +610,7 @@ class SheetsService {
       ['Devise Secondaire', voyage.deviseSecondaire ?? ''],
       ['Taux Conversion', voyage.tauxConversion ?? ''],
       ['Spreadsheet ID', spreadsheetId],
+      ['Config Updated At', voyage.configUpdatedAt.toIso8601String()],
       [],
       ['PORTEFEUILLES'],
       [
@@ -634,11 +635,11 @@ class SheetsService {
 
     data.add([]);
     data.add(['TYPES MOUVEMENTS']);
-    data.add(['Code', 'Libellé']);
+    data.add(['Code', 'Libellé', 'Icon']);
 
     // -- TYPES MOUVEMENTS --
     for (var t in voyage.typesMouvements) {
-      data.add([t.code, t.libelle]);
+      data.add([t.code, t.libelle, t.iconName ?? '']);
     }
 
     // 3. Écrire les données
@@ -738,6 +739,19 @@ class SheetsService {
       final List<Portefeuille> portefeuilles = [];
       final List<TypeMouvement> types = [];
 
+      // Parse Metadata first
+      DateTime? lastUpdated;
+      for (var row in values) {
+        if (row.isNotEmpty &&
+            row[0].toString() == 'Config Updated At' &&
+            row.length >= 2) {
+          try {
+            lastUpdated = DateTime.parse(row[1].toString());
+          } catch (_) {}
+          break; // Found it
+        }
+      }
+
       // Indices de colonnes (0-based)
       bool sectionPortefeuilles = false;
       bool sectionTypes = false;
@@ -796,7 +810,10 @@ class SheetsService {
           if (row.length >= 2) {
             final code = row[0].toString();
             final libelle = row[1].toString();
-            types.add(TypeMouvement(code: code, libelle: libelle));
+            final iconName = row.length >= 3 ? row[2].toString() : null;
+            types.add(
+              TypeMouvement(code: code, libelle: libelle, iconName: iconName),
+            );
           }
         }
       }
@@ -810,6 +827,7 @@ class SheetsService {
       return AppConfig(
         defaultPortefeuilles: portefeuilles,
         defaultTypesMouvements: types,
+        lastUpdated: lastUpdated,
       );
     } catch (e) {
       // print('Erreur lors du chargement de la config globale : $e');

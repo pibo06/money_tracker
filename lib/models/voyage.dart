@@ -8,6 +8,7 @@ class Voyage {
   final String devisePrincipale;
   final String? deviseSecondaire;
   final double? tauxConversion;
+  final DateTime configUpdatedAt;
   List<TypeMouvement> typesMouvements;
   List<Portefeuille> portefeuilles;
 
@@ -18,9 +19,11 @@ class Voyage {
     required this.devisePrincipale,
     this.deviseSecondaire,
     this.tauxConversion,
+    DateTime? configUpdatedAt,
     List<TypeMouvement>? typesMouvements,
     List<Portefeuille>? portefeuilles,
-  }) : typesMouvements = typesMouvements ?? [],
+  }) : configUpdatedAt = configUpdatedAt ?? DateTime.now(),
+       typesMouvements = typesMouvements ?? [],
        portefeuilles = portefeuilles ?? [];
 
   Voyage copyWith({
@@ -30,6 +33,7 @@ class Voyage {
     String? devisePrincipale,
     String? deviseSecondaire,
     double? tauxConversion,
+    DateTime? configUpdatedAt,
     List<TypeMouvement>? typesMouvements,
     List<Portefeuille>? portefeuilles,
   }) {
@@ -40,6 +44,7 @@ class Voyage {
       devisePrincipale: devisePrincipale ?? this.devisePrincipale,
       deviseSecondaire: deviseSecondaire ?? this.deviseSecondaire,
       tauxConversion: tauxConversion ?? this.tauxConversion,
+      configUpdatedAt: configUpdatedAt ?? this.configUpdatedAt,
       typesMouvements: typesMouvements ?? this.typesMouvements,
       portefeuilles: portefeuilles ?? this.portefeuilles,
     );
@@ -53,6 +58,7 @@ class Voyage {
     'devisePrincipale': devisePrincipale,
     'deviseSecondaire': deviseSecondaire,
     'tauxConversion': tauxConversion,
+    'configUpdatedAt': configUpdatedAt.toIso8601String(),
     // Sérialisation des listes d'objets
     'typesMouvements': typesMouvements.map((t) => t.toJson()).toList(),
     'portefeuilles': portefeuilles.map((p) => p.toJson()).toList(),
@@ -81,6 +87,9 @@ class Voyage {
       devisePrincipale: json['devisePrincipale'] as String,
       deviseSecondaire: json['deviseSecondaire'] as String?,
       tauxConversion: (json['tauxConversion'] as num?)?.toDouble(),
+      configUpdatedAt: json['configUpdatedAt'] != null
+          ? DateTime.parse(json['configUpdatedAt'] as String)
+          : null, // Default to now() in constructor if null
       typesMouvements: typesMouvements,
       portefeuilles: portefeuilles,
     );

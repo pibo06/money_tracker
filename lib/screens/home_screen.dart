@@ -5,47 +5,54 @@ import 'package:money_tracker/models/voyage.dart';
 import 'package:money_tracker/screens/nouveau_voyage_screen.dart';
 import 'package:money_tracker/screens/voyage_details_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  bool _hasAutoNavigated = false;
+
+  @override
   Widget build(BuildContext context) {
-    // Le Scaffold est la structure de base de la page (Appbar, corps, FloatingActionButton)
     return Scaffold(
       appBar: AppBar(title: const Text('Mes Voyages'), centerTitle: true),
-      // BlocBuilder réagit aux changements d'état du VoyageCubit
-      body: BlocBuilder<VoyageCubit, VoyageState>(
-        builder: (context, state) {
-          // Affichage conditionnel : si la liste est vide ou non
-          if (state.voyages.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(32.0),
-                child: Text(
-                  'Aucun voyage trouvé. Cliquez sur le bouton "+" pour en ajouter un.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 18, color: Colors.grey),
-                ),
-              ),
-            );
+      // BlocListener pour gérer la navigation automatique (Side Effect)
+      body: BlocListener<VoyageCubit, VoyageState>(
+        listener: (context, state) {
+          if (!_hasAutoNavigated && state.voyages.isNotEmpty) {
+            _handleAutoNavigation(state.voyages);
           }
-
-          // Si des voyages existent, on les affiche dans une liste
-          return ListView.builder(
-            itemCount: state.voyages.length,
-            itemBuilder: (context, index) {
-              final voyage = state.voyages[index];
-              return _buildVoyageCard(context, voyage);
-            },
-          );
         },
-      ),
+        child: BlocBuilder<VoyageCubit, VoyageState>(
+          builder: (context, state) {
+            if (state.voyages.isEmpty) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32.0),
+                  child: Text(
+                    'Aucun voyage trouvé. Cliquez sur le bouton "+" pour en ajouter un.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 18, color: Colors.grey),
+                  ),
+                ),
+              );
+            }
 
-      // Bouton pour ajouter un voyage
-      // ... dans la méthode build du HomeScreen
+            return ListView.builder(
+              itemCount: state.voyages.length,
+              itemBuilder: (context, index) {
+                final voyage = state.voyages[index];
+                return _buildVoyageCard(context, voyage);
+              },
+            );
+          },
+        ),
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // Lancement de l'écran de création du voyage
           Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const NouveauVoyageScreen()),
           );
@@ -55,7 +62,54 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // Widget pour construire l'affichage d'un voyage
+  void _handleAutoNavigation(List<Voyage> voyages) {
+    final now = DateTime.now();
+    Voyage? targetVoyage;
+
+    // 1. Chercher un voyage en cours (Date incluse)
+    // On normalise les dates pour ignorer l'heure si besoin, mais ici on compare DateTime direct
+    try {
+      targetVoyage = voyages.firstWhere((v) {
+        final start = v.dateDebut;
+        // On considère la fin jusqu'à la fin de la journée (23h59) si ce n'est pas déjà géré
+        // Mais Voyage.dateFin est un DateTime.
+        // Supposons start <= now <= end
+        return now.isAfter(start.subtract(const Duration(days: 1))) &&
+            now.isBefore(v.dateFin.add(const Duration(days: 1)));
+      });
+    } catch (_) {
+      // Pas de voyage en cours
+    }
+
+    // 2. Si pas de voyage en cours, chercher le PROCHAIN voyage
+    if (targetVoyage == null) {
+      final futureVoyages = voyages
+          .where((v) => v.dateDebut.isAfter(now))
+          .toList();
+      if (futureVoyages.isNotEmpty) {
+        futureVoyages.sort((a, b) => a.dateDebut.compareTo(b.dateDebut));
+        targetVoyage = futureVoyages.first;
+      }
+    }
+
+    if (targetVoyage != null) {
+      setState(() {
+        _hasAutoNavigated = true;
+      });
+      // Navigation
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => VoyageDetailsScreen(voyage: targetVoyage!),
+        ),
+      );
+    } else {
+      // Validation que l'auto-nav a été checkée même si rien trouvé, pour ne pas retry en boucle inutilement
+      setState(() {
+        _hasAutoNavigated = true;
+      });
+    }
+  }
+
   Widget _buildVoyageCard(BuildContext context, Voyage voyage) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -69,7 +123,6 @@ class HomeScreen extends StatelessWidget {
         ),
         trailing: const Icon(Icons.arrow_forward_ios),
         onTap: () {
-          // Naviguer vers l'écran de détails
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => VoyageDetailsScreen(voyage: voyage),
