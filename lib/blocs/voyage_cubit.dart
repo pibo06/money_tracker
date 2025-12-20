@@ -543,38 +543,60 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
     // ---------------------------------------------------------
     Voyage voyageEnCours = voyage;
     try {
-      final AppConfig? remoteConfig = await _sheetsService.fetchGlobalConfig();
+      final AppConfig? remoteConfig = await _sheetsService.fetchGlobalConfig(
+        voyageName: voyage.nom,
+      );
+
       if (remoteConfig != null && remoteConfig.lastUpdated != null) {
         final DateTime remoteTime = remoteConfig.lastUpdated!;
         final DateTime localTime = voyage.configUpdatedAt;
 
-        // Tolerance de 1s pour éviter les boucles infinies ou conflits mineurs
-        // Si Remote > Local : On écrase Local
-        if (remoteTime.isAfter(localTime)) {
-          // print('Sync Config: Remote ($remoteTime) > Local ($localTime). Pulling...');
+        // Comparaison stricte des timestamps
+        // Si Remote est plus récent (ou égal), on prend le Remote (PULL)
+        // Si Local est plus récent, on envoie le Local (PUSH)
+
+        // Comparaison précise incluant les millisecondes
+        bool remoteIsNewerOrEqual =
+            remoteTime.isAfter(localTime) ||
+            remoteTime.isAtSameMomentAs(localTime);
+
+        // Fallback robustesse: si différence minime en secondes mais ordre incorrect logiquement ?
+        // On s'en tient à la vérité stricte:
+        // Remote > Local => PULL
+        // Remote == Local => PULL (No-op)
+        // Local > Remote => PUSH
+
+        if (remoteIsNewerOrEqual) {
+          // print('DECISION: PULL (Remote newer or equal)');
           voyageEnCours = voyageEnCours.copyWith(
+            // Metadata (Dates, Devises, Taux)
+            // On ne synchronise PAS le nom ('nom') pour éviter de perdre le lien avec la feuille
+            dateDebut: remoteConfig.dateDebut ?? voyageEnCours.dateDebut,
+            dateFin: remoteConfig.dateFin ?? voyageEnCours.dateFin,
+            devisePrincipale:
+                remoteConfig.devisePrincipale ?? voyageEnCours.devisePrincipale,
+            deviseSecondaire:
+                remoteConfig.deviseSecondaire ?? voyageEnCours.deviseSecondaire,
+            tauxConversion:
+                remoteConfig.tauxConversion ?? voyageEnCours.tauxConversion,
+
             portefeuilles: remoteConfig.defaultPortefeuilles,
             typesMouvements: remoteConfig.defaultTypesMouvements,
             configUpdatedAt: remoteTime,
           );
-          // On met à jour l'état local immédiatement pour que l'UI reflète la nouvelle config
-          // avant même de traiter les mouvements
-          // Cependant, on ne push pas tout de suite, on attend la fin de la méthode si besoin ?
-          // Non, il faut le faire maintenant sinon le fetchMouvements va utiliser les anciens portefeuilles pour mapping ?
-          // fetchMouvements utilise le voyage passé en paramètre ? Oui.
-          // Mais 'fetchMouvements' se base sur les noms de feuilles, pas trop sur les portefeuilles.
-        }
-        // Si Local > Remote : On Push Local
-        else if (localTime.isAfter(remoteTime)) {
-          // print('Sync Config: Local ($localTime) > Remote ($remoteTime). Pushing...');
+        } else {
+          // Local strictement plus récent
+          // print('DECISION: PUSH (Local strictly newer)');
           await _sheetsService.syncVoyageConfig(voyageEnCours);
         }
       } else if (remoteConfig == null) {
-        // Pas de config remote ? On push la nôtre.
+        // print('DECISION: PUSH (No remote config)');
         await _sheetsService.syncVoyageConfig(voyageEnCours);
+      } else {
+        // print('DECISION: NO OP (Remote config exists but no timestamp?)');
       }
     } catch (e) {
-      // print('Erreur Sync Config: $e');
+      print('ERROR Sync Config: $e');
     }
 
     // 1. Fetch Remote Movements (Server Truth)
@@ -598,7 +620,7 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
     final Set<String> processedDates = {};
 
     // PASS 1: Traiter les mouvements LOCAUX
-    for (var p in voyageEnCours.portefeuilles) {
+    for (var p in voyage.portefeuilles) {
       for (var localM in p.mouvements) {
         final dateKey = localM.date.toIso8601String();
         processedDates.add(dateKey);
@@ -666,16 +688,17 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
 
     // 3. Reconstruire le Voyage pour mise à jour d'état (AVANT le Push)
     // Cela permet à l'UI de voir immédiatement les données du serveur
-    List<Portefeuille> portefeuillesIntermediaires = voyage.portefeuilles.map((
-      p,
-    ) {
-      final movementsForThisWallet = mergedPortefeuilles[p.libelle] ?? [];
-      // On trie par date décroissante pour l'affichage
-      movementsForThisWallet.sort((a, b) => b.date.compareTo(a.date));
-      return p.copyWith(mouvements: movementsForThisWallet);
-    }).toList();
+    // FIXED: Utiliser 'voyageEnCours' pour bénéficier de la config update potentielle
+    List<Portefeuille> portefeuillesIntermediaires = voyageEnCours.portefeuilles
+        .map((p) {
+          final movementsForThisWallet = mergedPortefeuilles[p.libelle] ?? [];
+          // On trie par date décroissante pour l'affichage
+          movementsForThisWallet.sort((a, b) => b.date.compareTo(a.date));
+          return p.copyWith(mouvements: movementsForThisWallet);
+        })
+        .toList();
 
-    Voyage voyageIntermediaire = voyage.copyWith(
+    Voyage voyageIntermediaire = voyageEnCours.copyWith(
       portefeuilles: portefeuillesIntermediaires,
     );
 
@@ -695,10 +718,8 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
       aPusher.addAll(p.mouvements.where((m) => !m.estSynchronise));
     }
     // On ajoute aussi les suppressions (estMarqueSupprimer ne devrait pas être dans la liste fusionnée, mais on devait les traiter ???)
-    // Correction de logique: les mouvements marqués à supprimer SONT dans 'mergedList' si passés par le filtre ?
-    // Non, ma logique de merge plus haut:
-    // "mergedPortefeuilles[p.libelle]?.add(localM)"
-    // Si localM estMarqueSupprimer, il est ajouté. Donc il est dans aPusher.
+
+    Voyage voyageFinal = voyageIntermediaire;
 
     if (aPusher.isNotEmpty) {
       // print('Sync OUT: Envoi de ${aPusher.length} mouvements.');
@@ -725,7 +746,7 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
         return p.copyWith(mouvements: cleanMovements);
       }).toList();
 
-      final voyageFinal = voyageIntermediaire.copyWith(
+      voyageFinal = voyageIntermediaire.copyWith(
         portefeuilles: finalPortefeuilles,
       );
 
@@ -747,7 +768,8 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
     }
 
     // 6. Config Sync
-    await _sheetsService.syncVoyageConfig(voyage);
+    // CRUCIAL: Utiliser voyageFinal (ou voyageIntermediaire si pas de modif de mvts) pour avoir la config à jour !
+    await _sheetsService.syncVoyageConfig(voyageFinal);
     // print('Synchronisation terminée.');
     return true;
   }

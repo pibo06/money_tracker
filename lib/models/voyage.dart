@@ -88,8 +88,10 @@ class Voyage {
       deviseSecondaire: json['deviseSecondaire'] as String?,
       tauxConversion: (json['tauxConversion'] as num?)?.toDouble(),
       configUpdatedAt: json['configUpdatedAt'] != null
-          ? DateTime.parse(json['configUpdatedAt'] as String)
-          : null, // Default to now() in constructor if null
+          ? DateTime.parse(json['configUpdatedAt'])
+          : DateTime.fromMillisecondsSinceEpoch(
+              0,
+            ), // Fallback: Old date to prioritize Remote
       typesMouvements: typesMouvements,
       portefeuilles: portefeuilles,
     );

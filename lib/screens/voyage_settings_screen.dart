@@ -7,6 +7,8 @@ import 'package:money_tracker/models/modepaiement.dart';
 import 'package:money_tracker/blocs/voyage_cubit.dart';
 import 'package:intl/intl.dart';
 import 'package:money_tracker/utils/icon_helpers.dart';
+import 'package:currency_picker/currency_picker.dart';
+import 'package:money_tracker/widgets/rate_calculator_dialog.dart';
 
 class VoyageSettingsScreen extends StatefulWidget {
   final Voyage voyage;
@@ -83,7 +85,7 @@ class _VoyageSettingsScreenState extends State<VoyageSettingsScreen>
             'Nom du voyage',
             voyage.nom,
             Icons.travel_explore,
-            () => _editVoyageName(context, voyage),
+            null, // Désactiver la modification (lié au Sheet name)
           ),
           const SizedBox(height: 12),
           _buildInfoCard(
@@ -147,6 +149,14 @@ class _VoyageSettingsScreenState extends State<VoyageSettingsScreen>
               ),
             ),
           ),
+          const SizedBox(height: 24),
+          Center(
+            child: Text(
+              'Dernière synchro config : ${DateFormat('dd/MM/yyyy HH:mm:ss').format(voyage.configUpdatedAt)}',
+              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+            ),
+          ),
+          const SizedBox(height: 16),
         ],
       ),
     );
@@ -244,7 +254,7 @@ class _VoyageSettingsScreenState extends State<VoyageSettingsScreen>
     String label,
     String value,
     IconData icon,
-    VoidCallback onTap,
+    VoidCallback? onTap,
   ) {
     return Card(
       child: ListTile(
@@ -254,7 +264,9 @@ class _VoyageSettingsScreenState extends State<VoyageSettingsScreen>
           value,
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
-        trailing: const Icon(Icons.edit),
+        trailing: onTap != null
+            ? const Icon(Icons.edit)
+            : const Icon(Icons.lock, color: Colors.grey),
         onTap: onTap,
       ),
     );
@@ -329,38 +341,6 @@ class _VoyageSettingsScreenState extends State<VoyageSettingsScreen>
 
   // ===== EDIT METHODS - VOYAGE INFO =====
 
-  void _editVoyageName(BuildContext context, Voyage voyage) {
-    final controller = TextEditingController(text: voyage.nom);
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Modifier le nom'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(labelText: 'Nom du voyage'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (controller.text.isNotEmpty) {
-                context.read<VoyageCubit>().updateVoyageInfo(
-                  voyage,
-                  nom: controller.text,
-                );
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Enregistrer'),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _editVoyageDates(BuildContext context, Voyage voyage) {
     // TODO: Implement date range picker
     ScaffoldMessenger.of(context).showSnackBar(
@@ -369,108 +349,78 @@ class _VoyageSettingsScreenState extends State<VoyageSettingsScreen>
   }
 
   void _editPrimaryCurrency(BuildContext context, Voyage voyage) {
-    final controller = TextEditingController(text: voyage.devisePrincipale);
-    showDialog(
+    showCurrencyPicker(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Modifier la devise principale'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(labelText: 'Devise (ex: EUR)'),
-          textCapitalization: TextCapitalization.characters,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (controller.text.isNotEmpty) {
-                context.read<VoyageCubit>().updateVoyageInfo(
-                  voyage,
-                  devisePrincipale: controller.text.toUpperCase(),
-                );
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Enregistrer'),
-          ),
-        ],
-      ),
+      showFlag: true,
+      showCurrencyName: true,
+      showCurrencyCode: true,
+      onSelect: (Currency currency) {
+        context.read<VoyageCubit>().updateVoyageInfo(
+          voyage,
+          devisePrincipale: currency.code,
+        );
+      },
     );
   }
 
   void _editSecondaryCurrency(BuildContext context, Voyage voyage) {
-    final controller = TextEditingController(
-      text: voyage.deviseSecondaire ?? '',
-    );
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Modifier la devise secondaire'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'Devise (ex: USD)',
-            hintText: 'Laisser vide pour supprimer',
-          ),
-          textCapitalization: TextCapitalization.characters,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler'),
-          ),
-          TextButton(
-            onPressed: () {
-              context.read<VoyageCubit>().updateVoyageInfo(
-                voyage,
-                deviseSecondaire: controller.text.isEmpty
-                    ? null
-                    : controller.text.toUpperCase(),
+      builder: (context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.currency_exchange),
+            title: const Text('Sélectionner une devise'),
+            onTap: () {
+              Navigator.pop(context); // Close bottom sheet
+              showCurrencyPicker(
+                context: context,
+                showFlag: true,
+                showCurrencyName: true,
+                showCurrencyCode: true,
+                onSelect: (Currency currency) {
+                  context.read<VoyageCubit>().updateVoyageInfo(
+                    voyage,
+                    deviseSecondaire: currency.code,
+                  );
+                },
               );
-              Navigator.pop(context);
             },
-            child: const Text('Enregistrer'),
           ),
+          if (voyage.deviseSecondaire != null)
+            ListTile(
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: const Text(
+                'Supprimer la devise secondaire',
+                style: TextStyle(color: Colors.red),
+              ),
+              onTap: () {
+                context.read<VoyageCubit>().updateVoyageInfo(
+                  voyage,
+                  deviseSecondaire: null,
+                );
+                Navigator.pop(context);
+              },
+            ),
         ],
       ),
     );
   }
 
   void _editConversionRate(BuildContext context, Voyage voyage) {
-    final controller = TextEditingController(
-      text: voyage.tauxConversion?.toString() ?? '',
-    );
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Modifier le taux de conversion'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(labelText: 'Taux'),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler'),
-          ),
-          TextButton(
-            onPressed: () {
-              final rate = double.tryParse(controller.text);
-              if (rate != null && rate > 0) {
-                context.read<VoyageCubit>().updateVoyageInfo(
-                  voyage,
-                  tauxConversion: rate,
-                );
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Enregistrer'),
-          ),
-        ],
+      builder: (context) => RateCalculatorDialog(
+        currentRate: voyage.tauxConversion,
+        primaryCurrency: voyage.devisePrincipale,
+        secondaryCurrency: voyage.deviseSecondaire ?? '???',
+        onSave: (double newRate) {
+          context.read<VoyageCubit>().updateVoyageInfo(
+            voyage,
+            tauxConversion: newRate,
+          );
+        },
       ),
     );
   }

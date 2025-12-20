@@ -566,7 +566,10 @@ class SheetsService {
         }
 
         final libelle = row.length > 1 ? row[1].toString() : code;
-        typesMouvements.add(TypeMouvement(code: code, libelle: libelle));
+        final iconName = row.length > 2 ? row[2].toString() : null;
+        typesMouvements.add(
+          TypeMouvement(code: code, libelle: libelle, iconName: iconName),
+        );
         currentRow++;
       }
 
@@ -705,10 +708,12 @@ class SheetsService {
 
   // --- 5. Récupération de la Configuration Globale (Sync IN) ---
 
-  Future<AppConfig?> fetchGlobalConfig() async {
+  Future<AppConfig?> fetchGlobalConfig({String? voyageName}) async {
     if (_sheetsApi == null) return null;
 
-    const configSheetName = '_Config';
+    final configSheetName = voyageName != null
+        ? '${voyageName}_Config'
+        : '_Config';
 
     try {
       // 1. Vérifier si la feuille existe
@@ -739,16 +744,44 @@ class SheetsService {
       final List<Portefeuille> portefeuilles = [];
       final List<TypeMouvement> types = [];
 
-      // Parse Metadata first
+      // Parse Metadata
       DateTime? lastUpdated;
+      String? nom;
+      DateTime? dateDebut;
+      DateTime? dateFin;
+      String? devisePrincipale;
+      String? deviseSecondaire;
+      double? tauxConversion;
+
+      // Metadata Rows
       for (var row in values) {
-        if (row.isNotEmpty &&
-            row[0].toString() == 'Config Updated At' &&
-            row.length >= 2) {
-          try {
-            lastUpdated = DateTime.parse(row[1].toString());
-          } catch (_) {}
-          break; // Found it
+        if (row.length >= 2) {
+          String key = row[0].toString().trim().toLowerCase();
+          String val = row[1].toString();
+
+          if (key == 'config updated at') {
+            try {
+              lastUpdated = DateTime.parse(val);
+            } catch (_) {}
+          } else if (key == 'nom') {
+            nom = val;
+          } else if (key == 'date début') {
+            try {
+              dateDebut = DateTime.parse(val);
+            } catch (_) {}
+          } else if (key == 'date fin') {
+            try {
+              dateFin = DateTime.parse(val);
+            } catch (_) {}
+          } else if (key == 'devise principale') {
+            devisePrincipale = val;
+          } else if (key == 'devise secondaire') {
+            deviseSecondaire = val;
+          } else if (key == 'taux conversion') {
+            try {
+              tauxConversion = double.parse(val.replaceAll(',', '.'));
+            } catch (_) {}
+          }
         }
       }
 
@@ -828,6 +861,12 @@ class SheetsService {
         defaultPortefeuilles: portefeuilles,
         defaultTypesMouvements: types,
         lastUpdated: lastUpdated,
+        nom: nom,
+        dateDebut: dateDebut,
+        dateFin: dateFin,
+        devisePrincipale: devisePrincipale,
+        deviseSecondaire: deviseSecondaire,
+        tauxConversion: tauxConversion,
       );
     } catch (e) {
       // print('Erreur lors du chargement de la config globale : $e');

@@ -5,6 +5,8 @@ import 'package:money_tracker/models/voyage.dart';
 import 'package:money_tracker/data/initial_data.dart';
 import 'package:money_tracker/models/portefeuille.dart';
 import 'package:money_tracker/models/typemouvement.dart';
+import 'package:currency_picker/currency_picker.dart';
+import 'package:money_tracker/widgets/rate_calculator_dialog.dart';
 
 class NouveauVoyageScreen extends StatefulWidget {
   const NouveauVoyageScreen({super.key});
@@ -24,9 +26,6 @@ class _NouveauVoyageScreenState extends State<NouveauVoyageScreen> {
   String _devisePrincipale = 'EUR'; // Valeur par défaut
   String? _deviseSecondaire;
   double? _tauxConversion;
-
-  // Liste factice des devises pour les tests
-  final List<String> _devisesDisponibles = ['EUR', 'USD', 'GBP', 'JPY', 'CAD'];
 
   // --- Fonctions de sélection de date ---
 
@@ -154,42 +153,68 @@ class _NouveauVoyageScreenState extends State<NouveauVoyageScreen> {
               const SizedBox(height: 24),
 
               // 3. Devise principale
-              _buildDeviseDropdown(
+              _buildCurrencySelector(
                 label: 'Devise Principale',
                 value: _devisePrincipale,
-                onChanged: (newValue) {
-                  setState(() => _devisePrincipale = newValue!);
+                onSelect: (Currency currency) {
+                  setState(() => _devisePrincipale = currency.code);
                 },
               ),
               const SizedBox(height: 16),
 
               // 4. Devise secondaire (Optionnelle)
-              _buildDeviseDropdown(
+              _buildCurrencySelector(
                 label: 'Devise Secondaire (Optionnel)',
                 value: _deviseSecondaire,
-                allowNull: true,
-                onChanged: (newValue) {
-                  setState(() => _deviseSecondaire = newValue);
+                onSelect: (Currency currency) {
+                  setState(() => _deviseSecondaire = currency.code);
+                },
+                onClear: () {
+                  setState(() {
+                    _deviseSecondaire = null;
+                    _tauxConversion = null;
+                  });
                 },
               ),
               const SizedBox(height: 16),
 
               // 5. Taux de conversion (si devise secondaire est sélectionnée)
               if (_deviseSecondaire != null)
-                _buildTextFormField(
-                  label:
-                      'Taux de conversion (1 $_devisePrincipale = X $_deviseSecondaire)',
-                  keyboardType: TextInputType.number,
-                  onSaved: (value) =>
-                      _tauxConversion = double.tryParse(value ?? '0'),
-                  validator: (value) {
-                    if (value == null ||
-                        double.tryParse(value) == null ||
-                        double.parse(value) <= 0) {
-                      return 'Veuillez entrer un taux valide (> 0)';
-                    }
-                    return null;
+                InkWell(
+                  onTap: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) => RateCalculatorDialog(
+                        currentRate: _tauxConversion,
+                        primaryCurrency: _devisePrincipale,
+                        secondaryCurrency: _deviseSecondaire!,
+                        onSave: (rate) {
+                          setState(() => _tauxConversion = rate);
+                        },
+                      ),
+                    );
                   },
+                  child: InputDecorator(
+                    decoration: InputDecoration(
+                      labelText:
+                          'Taux de conversion (1 $_devisePrincipale = ? $_deviseSecondaire)',
+                      border: const OutlineInputBorder(),
+                      suffixIcon: const Icon(Icons.calculate),
+                      errorText:
+                          _tauxConversion == null || _tauxConversion! <= 0
+                          ? 'Veuillez définir un taux valide'
+                          : null,
+                    ),
+                    child: Text(
+                      _tauxConversion?.toStringAsFixed(4) ?? 'Définir le taux',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: _tauxConversion == null
+                            ? Colors.grey[700]
+                            : Colors.black,
+                      ),
+                    ),
+                  ),
                 ),
               const SizedBox(height: 32),
 
@@ -257,45 +282,47 @@ class _NouveauVoyageScreenState extends State<NouveauVoyageScreen> {
     );
   }
 
-  // Widget pour la sélection des devises (Dropdown)
-  Widget _buildDeviseDropdown({
+  // --- Widget pour la sélection de devise (Picker) ---
+  Widget _buildCurrencySelector({
     required String label,
-    String? value,
-    required ValueChanged<String?> onChanged,
-    bool allowNull = false,
+    required String? value,
+    required ValueChanged<Currency> onSelect,
+    VoidCallback? onClear,
   }) {
-    List<DropdownMenuItem<String>> items = [];
-
-    if (allowNull) {
-      items.add(
-        const DropdownMenuItem(
-          value: null,
-          child: Text('Aucune devise secondaire'),
-        ),
-      );
-    }
-
-    items.addAll(
-      _devisesDisponibles.map((String currency) {
-        return DropdownMenuItem(value: currency, child: Text(currency));
-      }).toList(),
-    );
-
-    return DropdownButtonFormField<String>(
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-      ),
-      initialValue: value,
-      isExpanded: true,
-      items: items,
-      onChanged: onChanged,
-      validator: (val) {
-        if (!allowNull && val == null) {
-          return 'Ce champ est obligatoire';
-        }
-        return null;
+    return InkWell(
+      onTap: () {
+        showCurrencyPicker(
+          context: context,
+          showFlag: true,
+          showCurrencyName: true,
+          showCurrencyCode: true,
+          onSelect: onSelect,
+        );
       },
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          suffixIcon: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (onClear != null && value != null)
+                IconButton(
+                  icon: const Icon(Icons.clear, color: Colors.grey),
+                  onPressed: onClear,
+                ),
+              const Icon(Icons.keyboard_arrow_down),
+            ],
+          ),
+        ),
+        child: Text(
+          value ?? 'Sélectionner une devise',
+          style: TextStyle(
+            fontSize: 16,
+            color: value == null ? Colors.grey[700] : Colors.black,
+          ),
+        ),
+      ),
     );
   }
 }
