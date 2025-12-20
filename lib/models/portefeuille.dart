@@ -9,6 +9,9 @@ class Portefeuille extends Equatable {
   // Indique si le solde de ce portefeuille est compté dans la devise principale du voyage.
   final bool enDevisePrincipale;
 
+  // Indicates if the balance should be tracked for this wallet
+  final bool suiviSolde;
+
   final double soldeDepart;
 
   // Liste des mouvements effectués dans ce portefeuille
@@ -18,6 +21,7 @@ class Portefeuille extends Equatable {
     required this.libelle,
     required this.modePaiement,
     required this.enDevisePrincipale,
+    this.suiviSolde = false, // Default to false (expense tracking only)
     this.soldeDepart = 0.0,
     this.mouvements = const [],
   });
@@ -25,6 +29,19 @@ class Portefeuille extends Equatable {
   // --- Propriété Calculée : Solde Actuel ---
 
   double get soldeActuel {
+    // If balance tracking is disabled, we just show the total expenses (negative)
+    if (!suiviSolde) {
+      double totalDepenses = 0.0;
+      for (var mouvement in mouvements) {
+        if (enDevisePrincipale) {
+          totalDepenses += mouvement.montantDevisePrincipale;
+        } else {
+          totalDepenses += mouvement.montantDeviseSecondaire;
+        }
+      }
+      return totalDepenses;
+    }
+
     // Le solde de départ est la base.
     double totalMouvements = soldeDepart;
 
@@ -49,6 +66,7 @@ class Portefeuille extends Equatable {
     libelle,
     modePaiement,
     enDevisePrincipale,
+    suiviSolde,
     soldeDepart,
     mouvements,
   ];
@@ -67,7 +85,8 @@ class Portefeuille extends Equatable {
         json['modePaiement'] as Map<String, dynamic>,
       ),
       enDevisePrincipale: json['enDevisePrincipale'] as bool,
-      soldeDepart: json['soldeDepart'] as double,
+      suiviSolde: json['suiviSolde'] as bool? ?? false,
+      soldeDepart: (json['soldeDepart'] as num?)?.toDouble() ?? 0.0,
       mouvements: parsedMouvements,
     );
   }
@@ -76,6 +95,7 @@ class Portefeuille extends Equatable {
     'libelle': libelle,
     'modePaiement': modePaiement.toJson(),
     'enDevisePrincipale': enDevisePrincipale,
+    'suiviSolde': suiviSolde,
     'soldeDepart': soldeDepart,
     // Sérialisation de la liste de mouvements
     'mouvements': mouvements.map((m) => m.toJson()).toList(),
@@ -87,6 +107,7 @@ class Portefeuille extends Equatable {
     String? libelle,
     ModePaiement? modePaiement,
     bool? enDevisePrincipale,
+    bool? suiviSolde,
     double? soldeDepart,
     List<Mouvement>? mouvements,
   }) {
@@ -94,6 +115,7 @@ class Portefeuille extends Equatable {
       libelle: libelle ?? this.libelle,
       modePaiement: modePaiement ?? this.modePaiement,
       enDevisePrincipale: enDevisePrincipale ?? this.enDevisePrincipale,
+      suiviSolde: suiviSolde ?? this.suiviSolde,
       soldeDepart: soldeDepart ?? this.soldeDepart,
       // IMPORTANT : Utiliser une nouvelle instance de liste pour l'immutabilité
       mouvements: mouvements ?? this.mouvements,

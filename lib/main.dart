@@ -15,7 +15,7 @@ void main() async {
   try {
     // 1. Configuration initiale nécessaire pour les opérations asynchrones (fichiers)
     WidgetsFlutterBinding.ensureInitialized();
-    print('WidgetsFlutterBinding initialized');
+    // print('WidgetsFlutterBinding initialized');
 
     // 2. Initialisation du stockage local pour HydratedBloc
     final storage = await HydratedStorage.build(
@@ -25,7 +25,7 @@ void main() async {
               (await getApplicationDocumentsDirectory()).path,
             ),
     );
-    print('HydratedStorage initialized');
+    // print('HydratedStorage initialized');
 
     // 3. Affectation de l'instance de stockage au package HydratedBloc
     //    Ceci remplace l'utilisation de HydratedBlocOverrides.runZoned
@@ -34,8 +34,8 @@ void main() async {
     // 4. Lancement de l'application
     runApp(const MoneyTrackerApp());
   } catch (e, stackTrace) {
-    print('Error during startup: $e');
-    print(stackTrace);
+    // print('Error during startup: $e');
+    // print(stackTrace);
   }
 }
 

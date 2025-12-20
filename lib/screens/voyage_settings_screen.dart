@@ -614,6 +614,7 @@ class _VoyageSettingsScreenState extends State<VoyageSettingsScreen>
     final soldeController = TextEditingController(text: '0');
     ModePaiement? selectedMode;
     bool useMainCurrency = true;
+    bool suiviSolde = false;
 
     final paymentModes = _getPaymentModes(voyage);
     selectedMode = paymentModes.first;
@@ -669,13 +670,24 @@ class _VoyageSettingsScreenState extends State<VoyageSettingsScreen>
                   },
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: soldeController,
-                  decoration: const InputDecoration(labelText: 'Solde initial'),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
+                const SizedBox(height: 12),
+                SwitchListTile(
+                  title: const Text('Suivi de solde'),
+                  subtitle: const Text('Définir un budget/solde de départ'),
+                  value: suiviSolde,
+                  onChanged: (val) => setState(() => suiviSolde = val),
+                  contentPadding: EdgeInsets.zero,
                 ),
+                if (suiviSolde)
+                  TextField(
+                    controller: soldeController,
+                    decoration: const InputDecoration(
+                      labelText: 'Solde initial',
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                  ),
               ],
             ),
           ),
@@ -691,7 +703,10 @@ class _VoyageSettingsScreenState extends State<VoyageSettingsScreen>
                     libelle: libelleController.text,
                     modePaiement: selectedMode!,
                     enDevisePrincipale: useMainCurrency,
-                    soldeDepart: double.tryParse(soldeController.text) ?? 0.0,
+                    suiviSolde: suiviSolde,
+                    soldeDepart: suiviSolde
+                        ? (double.tryParse(soldeController.text) ?? 0.0)
+                        : 0.0,
                   );
                   context.read<VoyageCubit>().addPortefeuille(
                     voyage,
@@ -710,8 +725,12 @@ class _VoyageSettingsScreenState extends State<VoyageSettingsScreen>
 
   void _editWallet(BuildContext context, Voyage voyage, Portefeuille wallet) {
     final libelleController = TextEditingController(text: wallet.libelle);
+    final soldeController = TextEditingController(
+      text: wallet.soldeDepart.toString(),
+    );
     ModePaiement? selectedMode = wallet.modePaiement;
     bool useMainCurrency = wallet.enDevisePrincipale;
+    bool suiviSolde = wallet.suiviSolde;
 
     final paymentModes = _getPaymentModes(voyage);
 
@@ -765,6 +784,24 @@ class _VoyageSettingsScreenState extends State<VoyageSettingsScreen>
                     setState(() => useMainCurrency = value ?? true);
                   },
                 ),
+                const SizedBox(height: 12),
+                SwitchListTile(
+                  title: const Text('Suivi de solde'),
+                  subtitle: const Text('Définir un budget/solde de départ'),
+                  value: suiviSolde,
+                  onChanged: (val) => setState(() => suiviSolde = val),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                if (suiviSolde)
+                  TextField(
+                    controller: soldeController,
+                    decoration: const InputDecoration(
+                      labelText: 'Solde initial',
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                  ),
                 const SizedBox(height: 8),
                 Text(
                   'Solde actuel: ${wallet.soldeActuel.toStringAsFixed(2)}',
@@ -785,6 +822,10 @@ class _VoyageSettingsScreenState extends State<VoyageSettingsScreen>
                     libelle: libelleController.text,
                     modePaiement: selectedMode,
                     enDevisePrincipale: useMainCurrency,
+                    suiviSolde: suiviSolde,
+                    soldeDepart: suiviSolde
+                        ? (double.tryParse(soldeController.text) ?? 0.0)
+                        : 0.0,
                   );
                   context.read<VoyageCubit>().updatePortefeuille(
                     voyage,

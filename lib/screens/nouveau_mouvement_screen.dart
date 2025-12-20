@@ -362,124 +362,134 @@ class _NouveauMouvementScreenState extends State<NouveauMouvementScreen> {
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text(
-                'Nouvelle Dépense',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Text(
+                  'Nouvelle Dépense',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
               ),
-            ),
 
-            // Wallet selection or display
-            if (widget.portefeuilleActif != null)
-              // Show wallet name when pre-selected
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Theme.of(context).primaryColor,
-                    width: 2,
+              // Wallet selection or display
+              if (widget.portefeuilleActif != null)
+                // Show wallet name when pre-selected
+                Container(
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
                   ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.account_balance_wallet,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(
+                      context,
+                    ).primaryColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
                       color: Theme.of(context).primaryColor,
+                      width: 2,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _portefeuilleSelectionne!.libelle,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.account_balance_wallet,
+                        color: Theme.of(context).primaryColor,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _portefeuilleSelectionne!.libelle,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                          ),
-                          Text(
-                            'Solde: ${_portefeuilleSelectionne!.soldeActuel.toStringAsFixed(2)} ${_portefeuilleSelectionne!.enDevisePrincipale ? widget.voyage.devisePrincipale : widget.voyage.deviseSecondaire}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
+                            Text(
+                              'Solde: ${_portefeuilleSelectionne!.soldeActuel.toStringAsFixed(2)} ${_portefeuilleSelectionne!.enDevisePrincipale ? widget.voyage.devisePrincipale : widget.voyage.deviseSecondaire}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            else
-              // Show wallet slider when user needs to select
-              _buildPortefeuilleSlider(),
-
-            // Formulaire
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Date
-                    ListTile(
-                      leading: const Icon(Icons.calendar_today),
-                      title: Text(
-                        'Date: ${MaterialLocalizations.of(context).formatShortDate(_date)}',
-                      ),
-                      onTap: _selectionnerDate,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Libellé (Description)
-                    TextFormField(
-                      decoration: const InputDecoration(
-                        labelText: 'Description (Ex: Dîner à Rome)',
-                        border: OutlineInputBorder(),
-                      ),
-                      onSaved: (value) => _libelle = value ?? '',
-                      validator: (value) => value!.isEmpty
-                          ? 'Veuillez entrer une description'
-                          : null,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Sélecteur de Type de Mouvement
-                    _buildTypeMouvementDropdown(),
-                    const SizedBox(height: 16),
-
-                    // Champ de Montant et Conversion
-                    _buildMontantField(),
-                    const SizedBox(height: 24),
-
-                    // Bouton de Sauvegarde
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _sauvegarderMouvement,
-                        icon: const Icon(Icons.check),
-                        label: const Text('Enregistrer la Dépense'),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
+                )
+              else
+                // Show wallet slider when user needs to select
+                _buildPortefeuilleSlider(),
+
+              // Formulaire
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Date
+                      ListTile(
+                        leading: const Icon(Icons.calendar_today),
+                        title: Text(
+                          'Date: ${MaterialLocalizations.of(context).formatShortDate(_date)}',
+                        ),
+                        onTap: _selectionnerDate,
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Libellé (Description)
+                      TextFormField(
+                        decoration: const InputDecoration(
+                          labelText: 'Description (Ex: Dîner à Rome)',
+                          border: OutlineInputBorder(),
+                        ),
+                        onSaved: (value) => _libelle = value ?? '',
+                        validator: (value) => value!.isEmpty
+                            ? 'Veuillez entrer une description'
+                            : null,
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Sélecteur de Type de Mouvement
+                      _buildTypeMouvementDropdown(),
+                      const SizedBox(height: 16),
+
+                      // Champ de Montant et Conversion
+                      _buildMontantField(),
+                      const SizedBox(height: 24),
+
+                      // Bouton de Sauvegarde
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _sauvegarderMouvement,
+                          icon: const Icon(Icons.check),
+                          label: const Text('Enregistrer la Dépense'),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 15),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(
+                        height: 20,
+                      ), // Spacing pour éviter que le bouton soit collé en bas
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

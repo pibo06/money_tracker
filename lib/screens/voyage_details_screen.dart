@@ -6,6 +6,7 @@ import 'package:money_tracker/models/mouvement.dart';
 import 'package:money_tracker/models/typemouvement.dart';
 import 'package:money_tracker/blocs/voyage_cubit.dart';
 import 'package:money_tracker/screens/nouveau_mouvement_screen.dart';
+import 'package:money_tracker/screens/nouveau_transfert_screen.dart';
 import 'package:money_tracker/screens/voyage_settings_screen.dart';
 import 'package:intl/intl.dart';
 
@@ -42,14 +43,9 @@ class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
       context: context,
       isScrollControlled: true,
       builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: NouveauMouvementScreen(
-            voyage: widget.voyage,
-            portefeuilleActif: portefeuilleActif,
-          ),
+        return NouveauMouvementScreen(
+          voyage: widget.voyage,
+          portefeuilleActif: portefeuilleActif,
         );
       },
     );
@@ -177,13 +173,42 @@ class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
             ],
           ),
           // Show FAB only on wallet pages, not on summary
+          floatingActionButtonLocation:
+              FloatingActionButtonLocation.centerDocked,
           floatingActionButton: isOnWalletPage
-              ? FloatingActionButton(
-                  heroTag: 'add_mouvement_btn',
-                  onPressed: () {
-                    _showAddMouvementSheet(context, portefeuilleActif);
-                  },
-                  child: const Icon(Icons.add),
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 16.0,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      FloatingActionButton(
+                        heroTag: 'add_transfert_btn',
+                        backgroundColor: Colors.white,
+                        foregroundColor: Theme.of(context).primaryColor,
+                        onPressed: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            builder: (context) => NouveauTransfertScreen(
+                              voyage: voyageMisAJour,
+                              initialSourceWallet: portefeuilleActif,
+                            ),
+                          );
+                        },
+                        child: const Icon(Icons.swap_horiz),
+                      ),
+                      FloatingActionButton(
+                        heroTag: 'add_mouvement_btn',
+                        onPressed: () {
+                          _showAddMouvementSheet(context, portefeuilleActif);
+                        },
+                        child: const Icon(Icons.add),
+                      ),
+                    ],
+                  ),
                 )
               : null,
         );
@@ -197,8 +222,83 @@ class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
     Voyage voyage,
     double soldeTotal,
   ) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     final dateFormat = DateFormat('dd/MM/yyyy');
-    final duration = voyage.dateFin.difference(voyage.dateDebut).inDays;
+    final start = DateTime(
+      voyage.dateDebut.year,
+      voyage.dateDebut.month,
+      voyage.dateDebut.day,
+    );
+    final end = DateTime(
+      voyage.dateFin.year,
+      voyage.dateFin.month,
+      voyage.dateFin.day,
+    );
+
+    String dayLabel;
+    // Progression basée sur la date réelle (Today)
+    if (today.isBefore(start)) {
+      final daysUntil = start.difference(today).inDays;
+      dayLabel = 'J-$daysUntil';
+    } else if (today.isAfter(end)) {
+      dayLabel = 'Voyage terminé';
+    } else {
+      final daysSinceStart = today.difference(start).inDays + 1;
+      dayLabel = 'Jour $daysSinceStart';
+    }
+
+    // Calcul du nombre de jours pour la moyenne (basé sur le dernier mouvement)
+    int averageDays = 0;
+    final allRawMovements = voyage.portefeuilles
+        .expand((p) => p.mouvements)
+        .where((m) => !m.estMarqueSupprimer)
+        .toList();
+
+    if (allRawMovements.isNotEmpty) {
+      final maxDate = allRawMovements
+          .map((m) => m.date)
+          .reduce((a, b) => a.isAfter(b) ? a : b);
+      final maxDateMidnight = DateTime(
+        maxDate.year,
+        maxDate.month,
+        maxDate.day,
+      );
+
+      if (maxDateMidnight.isBefore(start)) {
+        averageDays = 1;
+      } else {
+        averageDays = maxDateMidnight.difference(start).inDays + 1;
+      }
+    }
+
+    // Calcul des moyennes par catégorie
+    // 1. Aplatir tous les mouvements de tous les portefeuilles
+    final allMovements = voyage.portefeuilles
+        .expand((p) => p.mouvements)
+        .where((m) => !m.estMarqueSupprimer)
+        .where((m) => m.typeMouvement.code != 'TRF') // Hors transferts
+        .where((m) => m.montantDevisePrincipale < 0) // Dépenses uniquement
+        .toList();
+
+    // 2. Grouper par catégorie
+    final Map<String, double> expensesByCategory = {};
+    for (var m in allMovements) {
+      final cat = m.typeMouvement.libelle;
+      final amount = m.montantDevisePrincipale
+          .abs(); // Toujours positif pour l'affichage
+      expensesByCategory[cat] = (expensesByCategory[cat] ?? 0.0) + amount;
+    }
+
+    // 4. Calcul du total des dépenses (somme des catégories)
+    final double totalExpenses = expensesByCategory.values.fold(
+      0.0,
+      (sum, val) => sum + val,
+    );
+
+    // 5. Trier par montant décroissant
+    final sortedCategories = expensesByCategory.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(12),
@@ -209,55 +309,52 @@ class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Title
-              const Center(
-                child: Text(
-                  'Résumé du Voyage',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                ),
-              ),
-              const SizedBox(height: 20),
-              // Total Balance
+              // Total Expenses (replaced Solde Total, removed "Résumé du Voyage" title)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'Solde Total',
+                    'Total Dépenses',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   Text(
-                    '${soldeTotal.toStringAsFixed(2)} ${voyage.devisePrincipale}',
-                    style: TextStyle(
+                    '${totalExpenses.toStringAsFixed(2)} ${voyage.devisePrincipale}',
+                    style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
-                      color: soldeTotal >= 0 ? Colors.green : Colors.red,
+                      color: Colors.red, // Expenses are red
                     ),
                   ),
                 ],
               ),
               const Divider(height: 30),
-              // Dates
+
+              // Progression (Dynamic Day)
               Row(
                 children: [
-                  const Icon(Icons.calendar_today, size: 18),
+                  const Icon(Icons.timer, size: 18),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Période',
+                          'Progression',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
                         Text(
-                          '${dateFormat.format(voyage.dateDebut)} - ${dateFormat.format(voyage.dateFin)}',
-                          style: const TextStyle(fontSize: 16),
+                          dayLabel,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blueAccent,
+                          ),
                         ),
                         Text(
-                          '$duration jours',
+                          '${dateFormat.format(voyage.dateDebut)} - ${dateFormat.format(voyage.dateFin)}',
                           style: TextStyle(
                             fontSize: 14,
                             color: Colors.grey[600],
@@ -268,6 +365,60 @@ class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
                   ),
                 ],
               ),
+              const SizedBox(height: 16),
+
+              // Dépenses Moyennes (Si voyage commencé)
+              if (averageDays > 0 && sortedCategories.isNotEmpty) ...[
+                const Divider(height: 30),
+                Text(
+                  'Dépenses Moyennes ($averageDays j)',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ...sortedCategories.map((entry) {
+                  final avg = entry.value / averageDays;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          entry.key,
+                          style: const TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                        Text(
+                          '${avg.toStringAsFixed(2)} ${voyage.devisePrincipale}/j',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Divider(),
+                ),
+                // Total Moyenne
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'TOTAL estimé',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      '${(sortedCategories.fold(0.0, (sum, e) => sum + e.value) / averageDays).toStringAsFixed(2)} ${voyage.devisePrincipale}/j',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 16),
               // Currencies
               Row(
@@ -401,14 +552,27 @@ class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
+                  if (portefeuille.suiviSolde)
+                    Text(
+                      'Solde: ${portefeuille.soldeActuel.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: portefeuille.soldeActuel >= 0
+                            ? Colors.green
+                            : Colors.red,
+                      ),
+                    ),
                   Text(
-                    portefeuille.soldeActuel.toStringAsFixed(2),
+                    'Dépenses: ${(portefeuille.suiviSolde ? (portefeuille.soldeActuel - portefeuille.soldeDepart) : portefeuille.soldeActuel).abs().toStringAsFixed(2)}',
                     style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: portefeuille.soldeActuel >= 0
-                          ? Colors.green
-                          : Colors.red,
+                      fontSize: portefeuille.suiviSolde
+                          ? 12
+                          : 18, // Smaller if secondary
+                      fontWeight: portefeuille.suiviSolde
+                          ? FontWeight.normal
+                          : FontWeight.bold,
+                      color: Colors.red,
                     ),
                   ),
                   Text(
@@ -445,9 +609,10 @@ class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
     Portefeuille portefeuille,
   ) {
     // Filter out movements marked for deletion
-    final visibleMovements = mouvements
-        .where((m) => !m.estMarqueSupprimer)
-        .toList();
+    // Requested Change: Show them but visually distinct
+    final visibleMovements = mouvements;
+    //    .where((m) => !m.estMarqueSupprimer)
+    //    .toList();
 
     final dateFormat = DateFormat('dd/MM/yyyy');
     final timeFormat = DateFormat('HH:mm');
@@ -493,25 +658,50 @@ class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
         widgets.add(
           Card(
             margin: const EdgeInsets.only(bottom: 8),
+            color: mouvement.estMarqueSupprimer ? Colors.grey[200] : null,
             child: ListTile(
               leading: CircleAvatar(
-                backgroundColor: isExpense
-                    ? Colors.red.withValues(alpha: 0.1)
-                    : Colors.green.withValues(alpha: 0.1),
+                backgroundColor: mouvement.estMarqueSupprimer
+                    ? Colors.grey
+                    : (isExpense
+                          ? Colors.red.withValues(alpha: 0.1)
+                          : Colors.green.withValues(alpha: 0.1)),
                 child: Icon(
-                  isExpense ? Icons.arrow_downward : Icons.arrow_upward,
-                  color: isExpense ? Colors.red : Colors.green,
+                  mouvement.estMarqueSupprimer
+                      ? Icons.delete_forever
+                      : (isExpense ? Icons.arrow_downward : Icons.arrow_upward),
+                  color: mouvement.estMarqueSupprimer
+                      ? Colors.white
+                      : (isExpense ? Colors.red : Colors.green),
                 ),
               ),
               title: Text(
                 mouvement.libelle,
-                style: const TextStyle(fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  decoration: mouvement.estMarqueSupprimer
+                      ? TextDecoration.lineThrough
+                      : null,
+                  color: mouvement.estMarqueSupprimer
+                      ? Colors.grey
+                      : Colors.black,
+                ),
               ),
               subtitle: Row(
                 children: [
                   Text(
-                    mouvement.typeMouvement.libelle,
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    mouvement.estMarqueSupprimer
+                        ? 'À SUPPRIMER'
+                        : mouvement.typeMouvement.libelle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: mouvement.estMarqueSupprimer
+                          ? Colors.red
+                          : Colors.grey[600],
+                      fontWeight: mouvement.estMarqueSupprimer
+                          ? FontWeight.bold
+                          : null,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -529,19 +719,34 @@ class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: isExpense ? Colors.red : Colors.green,
+                      decoration: mouvement.estMarqueSupprimer
+                          ? TextDecoration.lineThrough
+                          : null,
+                      color: mouvement.estMarqueSupprimer
+                          ? Colors.grey
+                          : (isExpense ? Colors.red : Colors.green),
                     ),
                   ),
                   if (mouvement.estSynchronise)
                     Icon(Icons.cloud_done, size: 16, color: Colors.grey[400]),
                 ],
               ),
-              onTap: () => _showMovementOptions(
-                context,
-                voyage,
-                portefeuille,
-                mouvement,
-              ),
+              onTap: mouvement.estMarqueSupprimer
+                  ? () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Ce mouvement est en attente de suppression par la synchronisation.',
+                          ),
+                        ),
+                      );
+                    }
+                  : () => _showMovementOptions(
+                      context,
+                      voyage,
+                      portefeuille,
+                      mouvement,
+                    ),
             ),
           ),
         );
@@ -668,6 +873,7 @@ class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
                         initialTime: TimeOfDay.fromDateTime(selectedDate),
                       );
                       if (time != null) {
+                        final now = DateTime.now();
                         setState(() {
                           selectedDate = DateTime(
                             date.year,
@@ -675,6 +881,8 @@ class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
                             date.day,
                             time.hour,
                             time.minute,
+                            now.second,
+                            now.millisecond,
                           );
                         });
                       }

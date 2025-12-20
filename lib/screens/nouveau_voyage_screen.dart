@@ -50,44 +50,71 @@ class _NouveauVoyageScreenState extends State<NouveauVoyageScreen> {
 
   // --- Fonction d'enregistrement du voyage ---
 
-  void _sauvegarderVoyage() {
+  Future<void> _sauvegarderVoyage() async {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
 
-      // --- 1. Génération des données par défaut ---
-
-      // Assurez-vous d'importer le fichier initial_data.dart en haut du fichier!
-      // import '../data/initial_data.dart';
-
-      final appConfig = context.read<VoyageCubit>().state.globalConfig;
-
-      final List<TypeMouvement> typesInitiaux =
-          appConfig?.defaultTypesMouvements != null
-          ? List.from(appConfig!.defaultTypesMouvements)
-          : getDefaultTypesMouvements();
-
-      final List<Portefeuille> portefeuillesInitiaux =
-          appConfig?.defaultPortefeuilles != null
-          ? List.from(appConfig!.defaultPortefeuilles)
-          : getDefaultPortefeuilles(_devisePrincipale, _deviseSecondaire);
-
-      // 2. Création du nouvel objet Voyage
-      final nouveauVoyage = Voyage(
-        nom: _nomVoyage,
-        dateDebut: _dateDebut!,
-        dateFin: _dateFin!,
-        devisePrincipale: _devisePrincipale,
-        deviseSecondaire: _deviseSecondaire,
-        tauxConversion: _tauxConversion,
-        typesMouvements: typesInitiaux, // <--- AJOUTÉ
-        portefeuilles: portefeuillesInitiaux, // <--- AJOUTÉ
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => const Center(child: CircularProgressIndicator()),
       );
 
-      // 3. Envoi du nouveau voyage au Cubit
-      context.read<VoyageCubit>().ajouterVoyage(nouveauVoyage);
+      final cubit = context.read<VoyageCubit>();
+
+      // 0. CHECK IMPORT: Vérifier si une config existe déjà sur le serveur
+      Voyage? importedVoyage;
+      try {
+        importedVoyage = await cubit.checkForRemoteConfig(_nomVoyage);
+      } catch (e) {
+        // print('Erreur check remote: $e');
+      }
+
+      if (!mounted) return;
+      Navigator.pop(context); // Dismiss loading
+
+      if (importedVoyage != null) {
+        // --- CAS IMPORT ---
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Voyage existant détecté ! Configuration importée depuis le serveur.',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+        cubit.ajouterVoyage(importedVoyage);
+      } else {
+        // --- CAS CRÉATION LOCALE ---
+        final appConfig = cubit.state.globalConfig;
+
+        final List<TypeMouvement> typesInitiaux =
+            appConfig?.defaultTypesMouvements != null
+            ? List.from(appConfig!.defaultTypesMouvements)
+            : getDefaultTypesMouvements();
+
+        final List<Portefeuille> portefeuillesInitiaux =
+            appConfig?.defaultPortefeuilles != null
+            ? List.from(appConfig!.defaultPortefeuilles)
+            : getDefaultPortefeuilles(_devisePrincipale, _deviseSecondaire);
+
+        final nouveauVoyage = Voyage(
+          nom: _nomVoyage,
+          dateDebut: _dateDebut!,
+          dateFin: _dateFin!,
+          devisePrincipale: _devisePrincipale,
+          deviseSecondaire: _deviseSecondaire,
+          tauxConversion: _tauxConversion,
+          typesMouvements: typesInitiaux,
+          portefeuilles: portefeuillesInitiaux,
+        );
+
+        cubit.ajouterVoyage(nouveauVoyage);
+      }
 
       // 4. Fermeture de l'écran
-      Navigator.of(context).pop();
+      if (mounted) Navigator.of(context).pop();
     }
   }
   // --- Construction de l'interface ---

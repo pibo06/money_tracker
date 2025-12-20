@@ -20,6 +20,9 @@ class Mouvement extends Equatable {
   // Indicateur local (souvent utilisé pour les rapprochements bancaires)
   final bool estPointe;
 
+  // Timestamp de dernière modification pour la synchronisation (Last Write Wins)
+  final DateTime updatedAt;
+
   // --- Propriétés pour la Synchronisation ---
   final bool estSynchronise;
   // ------------------------------------------
@@ -39,7 +42,9 @@ class Mouvement extends Equatable {
     this.estSynchronise =
         false, // Par défaut, un nouveau mouvement n'est pas synchronisé
     this.estMarqueSupprimer = false, // Par défaut, non marqué pour suppression
-  });
+    DateTime? updatedAt,
+  }) : updatedAt =
+           updatedAt ?? date; // Par défaut, updatedAt = date de création
 
   @override
   List<Object?> get props => [
@@ -53,6 +58,7 @@ class Mouvement extends Equatable {
     estPointe,
     estSynchronise,
     estMarqueSupprimer,
+    updatedAt,
   ];
 
   // --- Sérialisation (JSON) ---
@@ -74,6 +80,9 @@ class Mouvement extends Equatable {
       estPointe: json['estPointe'] as bool,
       estSynchronise: json['estSynchronise'] as bool,
       estMarqueSupprimer: json['estMarqueSupprimer'] as bool? ?? false,
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.parse(json['updatedAt'] as String)
+          : null,
     );
   }
 
@@ -89,6 +98,7 @@ class Mouvement extends Equatable {
     'estPointe': estPointe,
     'estSynchronise': estSynchronise,
     'estMarqueSupprimer': estMarqueSupprimer,
+    'updatedAt': updatedAt.toIso8601String(),
   };
 
   // --- Immutabilité (copyWith) ---
@@ -104,6 +114,7 @@ class Mouvement extends Equatable {
     bool? estPointe,
     bool? estSynchronise,
     bool? estMarqueSupprimer,
+    DateTime? updatedAt,
   }) {
     return Mouvement(
       date: date ?? this.date,
@@ -119,6 +130,7 @@ class Mouvement extends Equatable {
       estPointe: estPointe ?? this.estPointe,
       estSynchronise: estSynchronise ?? this.estSynchronise,
       estMarqueSupprimer: estMarqueSupprimer ?? this.estMarqueSupprimer,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 }

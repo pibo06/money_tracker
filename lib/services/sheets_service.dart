@@ -42,10 +42,10 @@ class SheetsService {
       // 3. Initialiser l'API Sheets
       _sheetsApi = sheets.SheetsApi(client);
 
-      print('Google Sheets API authentifiée avec succès.');
+      // print('Google Sheets API authentifiée avec succès.');
     } catch (e) {
       // Afficher une erreur en cas d'échec (souvent dû à un fichier JSON manquant ou incorrect)
-      print('Erreur d\'authentification Google Sheets: $e');
+      // print('Erreur d\'authentification Google Sheets: $e');
       _sheetsApi = null;
     }
   }
@@ -65,7 +65,7 @@ class SheetsService {
     String devisePrincipale,
   ) async {
     if (_sheetsApi == null) {
-      print('API Sheets non initialisée. Impossible de synchroniser.');
+      // print('API Sheets non initialisée. Impossible de synchroniser.');
       return;
     }
 
@@ -87,12 +87,15 @@ class SheetsService {
         // On stocke les dates et leur index (0-based dans la liste, mais 1-based pour Sheets)
         // Adjustement: Sheets row 1 is usually header.
         // On va assumer que la première ligne est un header si on ne trouve pas de date valide.
-        existingDates = responseVals.values!
-            .map((row) => row.isNotEmpty ? row[0].toString() : '')
-            .toList();
+        existingDates = responseVals.values!.map((row) {
+          if (row.isEmpty) return '';
+          String val = row[0].toString();
+          if (val.startsWith("'")) val = val.substring(1);
+          return val;
+        }).toList();
       }
     } catch (e) {
-      print('Erreur lors de la lecture de la feuille (ou feuille vide) : $e');
+      // print('Erreur lors de la lecture de la feuille (ou feuille vide) : $e');
       // On continue, on considérera tout comme nouveau.
     }
 
@@ -128,7 +131,7 @@ class SheetsService {
           );
           toUpdate.add(
             sheets.ValueRange(
-              range: '$sheetName!A$rowIndex:H$rowIndex',
+              range: '$sheetName!A$rowIndex:I$rowIndex',
               values: [rowData],
             ),
           );
@@ -151,9 +154,9 @@ class SheetsService {
           ),
           spreadsheetId,
         );
-        print('${toUpdate.length} lignes mises à jour.');
+        // print('${toUpdate.length} lignes mises à jour.');
       } catch (e) {
-        print('Erreur lors des mises à jour batch: $e');
+        // print('Erreur lors des mises à jour batch: $e');
       }
     }
 
@@ -171,13 +174,13 @@ class SheetsService {
         await _sheetsApi!.spreadsheets.values.append(
           valueRange,
           spreadsheetId,
-          '$sheetName!A:H',
+          '$sheetName!A:I',
           valueInputOption: 'USER_ENTERED',
           insertDataOption: 'INSERT_ROWS',
         );
-        print('${toAppend.length} nouvelles lignes ajoutées.');
+        // print('${toAppend.length} nouvelles lignes ajoutées.');
       } catch (e) {
-        print('Erreur lors de l\'ajout (append): $e');
+        // print('Erreur lors de l\'ajout (append): $e');
       }
     }
 
@@ -196,7 +199,7 @@ class SheetsService {
         );
         sheetId = sheet?.properties?.sheetId;
       } catch (e) {
-        print('Impossible de récupérer le sheetId pour la suppression : $e');
+        // print('Impossible de récupérer le sheetId pour la suppression : $e');
       }
 
       if (sheetId != null) {
@@ -218,9 +221,9 @@ class SheetsService {
             sheets.BatchUpdateSpreadsheetRequest(requests: requests),
             spreadsheetId,
           );
-          print('${rowsToDelete.length} lignes supprimées.');
+          // print('${rowsToDelete.length} lignes supprimées.');
         } catch (e) {
-          print('Erreur lors de la suppression batch: $e');
+          // print('Erreur lors de la suppression batch: $e');
         }
       }
     }
@@ -233,14 +236,14 @@ class SheetsService {
     String sheetName,
   ) async {
     if (_sheetsApi == null) {
-      print(
-        'API Sheets non initialisée. Impossible de récupérer les mouvements.',
-      );
+      // print(
+      //   'API Sheets non initialisée. Impossible de récupérer les mouvements.',
+      // );
       return [];
     }
 
     try {
-      final range = '$sheetName!A:H'; // Lecture des colonnes A à H
+      final range = '$sheetName!A:I'; // Lecture des colonnes A à I
       final response = await _sheetsApi!.spreadsheets.values.get(
         spreadsheetId,
         range,
@@ -262,7 +265,10 @@ class SheetsService {
         try {
           if (row.length < 8) continue; // Ligne incomplète
 
-          final dateStr = row[0].toString();
+          var dateStr = row[0].toString();
+          if (dateStr.startsWith("'")) {
+            dateStr = dateStr.substring(1);
+          }
           final libelle = row[1].toString();
           final categorieLibelle = row[2].toString();
           final portefeuilleLibelle = row[3].toString();
@@ -276,9 +282,20 @@ class SheetsService {
           final date = DateTime.tryParse(dateStr);
           if (date == null) continue;
 
+          // Parsing UpdatedAt (Colonne I / Index 8)
+          DateTime updatedAt = date; // Default to created date
+          if (row.length >= 9) {
+            final updatedAtStr = row[8].toString();
+            updatedAt = DateTime.tryParse(updatedAtStr) ?? date;
+          }
+
           // Parsing Montants
-          double montantDP = double.tryParse(montantDPStr) ?? 0.0;
-          double montantDS = double.tryParse(montantDSStr) ?? 0.0;
+          // Sanitize strings: replace comma with dot, remove spaces
+          String cleanNumber(String s) =>
+              s.replaceAll(',', '.').replaceAll(RegExp(r'\s+'), '');
+
+          double montantDP = double.tryParse(cleanNumber(montantDPStr)) ?? 0.0;
+          double montantDS = double.tryParse(cleanNumber(montantDSStr)) ?? 0.0;
 
           // Gestion du signe selon le type d'opération
           if (typeOp == 'Dépense') {
@@ -317,16 +334,17 @@ class SheetsService {
               typeMouvement: typeMvt,
               portefeuille: portefeuille,
               estSynchronise: true, // Vient du serveur -> Synchro OK
+              updatedAt: updatedAt,
             ),
           );
         } catch (e) {
-          print('Erreur parsing ligne $i: $e');
+          // print('Erreur parsing ligne $i: $e');
         }
       }
 
       return mouvements;
     } catch (e) {
-      print('Erreur lors de la récupération des mouvements: $e');
+      // print('Erreur lors de la récupération des mouvements: $e');
       return [];
     }
   }
@@ -358,7 +376,7 @@ class SheetsService {
           ),
           spreadsheetId,
         );
-        print('Feuille "$sheetName" créée.');
+        // print('Feuille "$sheetName" créée.');
 
         // 2. Ajouter les en-têtes
         final headers = [
@@ -370,6 +388,7 @@ class SheetsService {
           'Montant DS',
           'Type Opération',
           'Devise',
+          'Updated At',
         ];
 
         final valueRange = sheets.ValueRange.fromJson({
@@ -383,10 +402,10 @@ class SheetsService {
           valueInputOption: 'USER_ENTERED',
           insertDataOption: 'INSERT_ROWS',
         );
-        print('En-têtes ajoutés à la feuille "$sheetName".');
+        // print('En-têtes ajoutés à la feuille "$sheetName".');
       }
     } catch (e) {
-      print('Erreur lors de la vérification/création de la feuille : $e');
+      // print('Erreur lors de la vérification/création de la feuille : $e');
     }
   }
 
@@ -398,8 +417,9 @@ class SheetsService {
     required String devisePrincipale,
   }) {
     // Les colonnes doivent correspondre à l'ordre dans votre feuille Google Sheets
+    // Protection de la date (Clé unique) avec ' pour éviter le reformatage/arrondi par Sheets
     return [
-      mouvement.date.toIso8601String(), // Colonne A: Date/Heure
+      "'${mouvement.date.toIso8601String()}", // Colonne A: Date/Heure (Texte brut garanti)
       mouvement.libelle, // Colonne B: Libellé
       mouvement.typeMouvement.libelle, // Colonne C: Catégorie
       mouvement.portefeuille.libelle, // Colonne D: Portefeuille
@@ -411,18 +431,170 @@ class SheetsService {
       mouvement.portefeuille.enDevisePrincipale
           ? devisePrincipale
           : mouvement.portefeuille.libelle, // Colonne H: Devise
+      mouvement.updatedAt.toIso8601String(), // Colonne I: Updated At
     ];
   }
   // --- 4. Synchronisation de la Configuration du Voyage ---
+
+  Future<Voyage?> fetchVoyageConfig(String voyageName) async {
+    if (_sheetsApi == null) await authenticate();
+    if (_sheetsApi == null) return null;
+
+    final configSheetName = '${voyageName}_Config';
+
+    try {
+      // 1. Check if sheet exists
+      final spreadsheet = await _sheetsApi!.spreadsheets.get(spreadsheetId);
+      final sheetExists =
+          spreadsheet.sheets?.any(
+            (s) => s.properties?.title == configSheetName,
+          ) ??
+          false;
+
+      if (!sheetExists) return null;
+
+      // 2. Fetch Config Data
+      // On lit une plage suffisante (ex: A1:C100)
+      final range = '$configSheetName!A1:C100';
+      final response = await _sheetsApi!.spreadsheets.values.get(
+        spreadsheetId,
+        range,
+      );
+      final rows = response.values;
+
+      if (rows == null || rows.isEmpty) return null;
+
+      // Helper to safely get string value
+      String getValue(int r, int c) {
+        if (rows.length > r && rows[r].length > c) {
+          return rows[r][c].toString();
+        }
+        return '';
+      }
+
+      // Metadata (Based on export structure)
+      // Row 3 (Index 3): Nom
+      // Row 4 (Index 4): Date Début
+      // Row 5 (Index 5): Date Fin
+      // Row 6 (Index 6): Devise Principale
+      // Row 7 (Index 7): Devise Secondaire
+      // Row 8 (Index 8): Taux Conversion
+
+      final nom = getValue(3, 1);
+      final dateDebut = DateTime.tryParse(getValue(4, 1)) ?? DateTime.now();
+      final dateFin = DateTime.tryParse(getValue(5, 1)) ?? DateTime.now();
+      final devisePrincipale = getValue(6, 1);
+      String? deviseSecondaire = getValue(7, 1);
+      if (deviseSecondaire.isEmpty) deviseSecondaire = null;
+
+      double? tauxConversion;
+      final tauxStr = getValue(8, 1).replaceAll(',', '.');
+      if (tauxStr.isNotEmpty) {
+        tauxConversion = double.tryParse(tauxStr);
+      }
+
+      // Parse PORTEFEUILLES
+      List<Portefeuille> portefeuilles = [];
+      int currentRow = 13; // Default start after header
+
+      // Locate 'PORTEFEUILLES' Header safely
+      for (int i = 0; i < rows.length; i++) {
+        if (rows[i].isNotEmpty && rows[i][0].toString() == 'PORTEFEUILLES') {
+          currentRow = i + 2; // Skip label + headers
+          break;
+        }
+      }
+
+      while (currentRow < rows.length) {
+        final row = rows[currentRow];
+        if (row.isEmpty || row[0].toString().isEmpty) {
+          currentRow++;
+          continue; // Empty line
+        }
+        if (row[0].toString() == 'TYPES MOUVEMENTS') break;
+
+        final libelle = row[0].toString();
+        final modeCode = row.length > 1 ? row[1].toString() : 'CASH';
+        final enDevisePrincipaleStr = row.length > 2
+            ? row[2].toString().toLowerCase()
+            : 'true';
+        final enDevisePrincipale = enDevisePrincipaleStr == 'true';
+
+        // Tenter de retrouver le libellé propre du mode de paiement
+        String modeLibelle = modeCode;
+        // Simple mapping based on code commonality if needed, or defaults
+        // Ici on reconstruit un ModePaiement avec le code.
+        // Si on voulait faire propre, on chercherait dans getDefaultModesPaiement()
+        final ModePaiement mp = ModePaiement(
+          code: modeCode,
+          libelle: modeLibelle,
+        );
+
+        portefeuilles.add(
+          Portefeuille(
+            libelle: libelle,
+            modePaiement: mp,
+            enDevisePrincipale: enDevisePrincipale,
+            mouvements: [], // Empty initially
+          ),
+        );
+        currentRow++;
+      }
+
+      // Parse TYPES MOUVEMENTS
+      List<TypeMouvement> typesMouvements = [];
+      // Locate 'TYPES MOUVEMENTS' Header safely
+      for (int i = currentRow; i < rows.length; i++) {
+        if (rows[i].isNotEmpty && rows[i][0].toString() == 'TYPES MOUVEMENTS') {
+          currentRow = i + 2; // Skip label + headers
+          break;
+        }
+      }
+
+      while (currentRow < rows.length) {
+        final row = rows[currentRow];
+        if (row.isEmpty) {
+          currentRow++;
+          continue;
+        }
+
+        final code = row[0].toString();
+        // If code is empty, skip
+        if (code.isEmpty) {
+          currentRow++;
+          continue;
+        }
+
+        final libelle = row.length > 1 ? row[1].toString() : code;
+        typesMouvements.add(TypeMouvement(code: code, libelle: libelle));
+        currentRow++;
+      }
+
+      return Voyage(
+        nom: nom.isNotEmpty ? nom : voyageName,
+        dateDebut: dateDebut,
+        dateFin: dateFin,
+        devisePrincipale: devisePrincipale,
+        deviseSecondaire: deviseSecondaire,
+        tauxConversion: tauxConversion,
+        portefeuilles: portefeuilles,
+        typesMouvements: typesMouvements,
+      );
+    } catch (e) {
+      // print('Erreur fetchVoyageConfig: $e');
+      return null;
+    }
+  }
 
   Future<void> syncVoyageConfig(Voyage voyage) async {
     if (_sheetsApi == null) return;
 
     final configSheetName = '${voyage.nom}_Config';
 
+    // print('Syncing config for voyage: ${voyage.nom}');
     // 1. Assurer que la feuille existe et est vide (ou la vider)
     await _prepareConfigSheet(configSheetName);
-
+    // print('Config sheet prepared for voyage: ${voyage.nom}');
     // 2. Préparer les données
     final List<List<Object>> data = [];
 
@@ -440,7 +612,13 @@ class SheetsService {
       ['Spreadsheet ID', spreadsheetId],
       [],
       ['PORTEFEUILLES'],
-      ['Libellé', 'ModePaiement', 'DevisePrincipale'],
+      [
+        'Libellé',
+        'ModePaiement',
+        'DevisePrincipale',
+        'SuiviSolde',
+        'SoldeInitial',
+      ],
     ]);
 
     // -- PORTEFEUILLES --
@@ -449,6 +627,8 @@ class SheetsService {
         p.libelle,
         p.modePaiement.code, // On stocke le code pour la réimportation facile
         p.enDevisePrincipale.toString(),
+        p.suiviSolde.toString(),
+        p.soldeDepart.toString(),
       ]);
     }
 
@@ -471,9 +651,9 @@ class SheetsService {
         '$configSheetName!A1',
         valueInputOption: 'USER_ENTERED',
       );
-      print('Configuration du voyage synchronisée sur $configSheetName');
+      // print('Configuration du voyage synchronisée sur $configSheetName');
     } catch (e) {
-      print('Erreur lors de l\'écriture de la config : $e');
+      // print('Erreur lors de l\'écriture de la config : $e');
     }
   }
 
@@ -518,7 +698,7 @@ class SheetsService {
         );
       }
     } catch (e) {
-      print('Erreur lors de la préparation de la feuille config : $e');
+      // print('Erreur lors de la préparation de la feuille config : $e');
     }
   }
 
@@ -537,12 +717,12 @@ class SheetsService {
       if (sheetsList != null) {
         exists = sheetsList.any((s) => s.properties?.title == configSheetName);
       }
-      print("recherche de $configSheetName");
-      print(exists);
+      // print("recherche de $configSheetName");
+      // print(exists);
       if (!exists) {
-        print(
-          'Feuille $configSheetName inexistante. Utilisation des défauts locaux.',
-        );
+        // print(
+        //   'Feuille $configSheetName inexistante. Utilisation des défauts locaux.',
+        // );
         return null;
       }
 
@@ -602,6 +782,12 @@ class SheetsService {
                 libelle: libelle,
                 modePaiement: ModePaiement(code: modeCode, libelle: labelMode),
                 enDevisePrincipale: enDevisePrincStr.toLowerCase() == 'true',
+                suiviSolde:
+                    row.length >= 4 &&
+                    row[3].toString().toLowerCase() == 'true',
+                soldeDepart: row.length >= 5
+                    ? double.tryParse(row[4].toString()) ?? 0.0
+                    : 0.0,
               ),
             );
           }
@@ -615,9 +801,9 @@ class SheetsService {
         }
       }
 
-      print(
-        'Config globale chargée depuis Sheets : ${portefeuilles.length} ptf, ${types.length} types.',
-      );
+      // print(
+      //   'Config globale chargée depuis Sheets : ${portefeuilles.length} ptf, ${types.length} types.',
+      // );
 
       if (portefeuilles.isEmpty && types.isEmpty) return null;
 
@@ -626,7 +812,7 @@ class SheetsService {
         defaultTypesMouvements: types,
       );
     } catch (e) {
-      print('Erreur lors du chargement de la config globale : $e');
+      // print('Erreur lors du chargement de la config globale : $e');
       return null;
     }
   }

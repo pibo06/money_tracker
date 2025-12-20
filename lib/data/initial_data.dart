@@ -12,6 +12,7 @@ List<TypeMouvement> getDefaultTypesMouvements() {
     TypeMouvement(code: 'DIV', libelle: 'Divertissement & Loisirs'),
     TypeMouvement(code: 'VOL', libelle: 'Vols & Billets'),
     TypeMouvement(code: 'LOG', libelle: 'Hôtels et logements'),
+    TypeMouvement(code: 'TRF', libelle: 'Transfert Interne'),
     TypeMouvement(code: 'AUT', libelle: 'Autres dépenses'),
   ];
 }

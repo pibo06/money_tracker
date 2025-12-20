@@ -234,10 +234,33 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
     if (indexMouvement == -1) return;
 
     final nouveauxMouvements = List<Mouvement>.from(portefeuille.mouvements);
-    // Reset sync flag when editing
-    nouveauxMouvements[indexMouvement] = newMouvement.copyWith(
-      estSynchronise: false,
+
+    // Check if date has changed (Sync Key Conflict)
+    final bool dateChanged = !oldMouvement.date.isAtSameMomentAs(
+      newMouvement.date,
     );
+
+    if (dateChanged) {
+      // Strategy: Soft Delete old + Create New
+
+      // 1. Mark old for deletion
+      nouveauxMouvements[indexMouvement] = oldMouvement.copyWith(
+        estMarqueSupprimer: true,
+        estSynchronise: false,
+        updatedAt: DateTime.now(),
+      );
+
+      // 2. Add new movement
+      nouveauxMouvements.add(
+        newMouvement.copyWith(estSynchronise: false, updatedAt: DateTime.now()),
+      );
+    } else {
+      // Strategy: In-place update
+      nouveauxMouvements[indexMouvement] = newMouvement.copyWith(
+        estSynchronise: false,
+        updatedAt: DateTime.now(),
+      );
+    }
 
     final portefeuilleMisAJour = portefeuille.copyWith(
       mouvements: nouveauxMouvements,
@@ -278,6 +301,7 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
     nouveauxMouvements[indexMouvement] = mouvement.copyWith(
       estMarqueSupprimer: true,
       estSynchronise: false, // Need to sync the deletion
+      updatedAt: DateTime.now(),
     );
 
     final portefeuilleMisAJour = portefeuille.copyWith(
@@ -368,6 +392,126 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
     emit(state.copyWith(voyages: nouvelleListeVoyages));
   }
 
+  // --- Gestion des Transferts Internes ---
+
+  void ajouterTransfert(
+    Voyage voyage,
+    Portefeuille source,
+    Portefeuille cible,
+    double montantSource,
+    DateTime date,
+  ) {
+    final trfType = voyage.typesMouvements.firstWhere(
+      (t) => t.code == 'TRF',
+      orElse: () => TypeMouvement(code: 'TRF', libelle: 'Transfert Interne'),
+    );
+
+    // 1. Mouvement Débit (Sortie d'argent de Source)
+    // Montant est NÉGATIF
+    double montantSrcDP = 0.0;
+    double montantSrcDS = 0.0;
+
+    if (source.enDevisePrincipale) {
+      // Source est en DP
+      montantSrcDP = -montantSource.abs();
+      // On convertit pour DS ( approximatif car on ne sait pas si c'est vraiment utilisé)
+      if (voyage.tauxConversion != null && voyage.tauxConversion != 0) {
+        montantSrcDS = montantSrcDP * voyage.tauxConversion!;
+      }
+    } else {
+      // Source est en DS
+      montantSrcDS = -montantSource.abs();
+      if (voyage.tauxConversion != null && voyage.tauxConversion != 0) {
+        montantSrcDP = montantSrcDS / voyage.tauxConversion!;
+      }
+    }
+
+    final mvtDebit = Mouvement(
+      date: date,
+      libelle: 'Transfert vers ${cible.libelle}',
+      montantDevisePrincipale: montantSrcDP,
+      montantDeviseSecondaire: montantSrcDS,
+      saisieDevisePrincipale: source.enDevisePrincipale,
+      typeMouvement: trfType,
+      portefeuille: source,
+      estSynchronise: false,
+    );
+
+    // 2. Mouvement Crédit (Entrée d'argent vers Cible)
+    // Montant est POSITIF
+    // Note: Le montant ajouté à la cible dépend de la devise de la CIBLE.
+    // Pour simplifier, on prend la valeur "contre-valeur" calculée lors du débit mais en positif.
+    // SAUF si conversion explicite nécessaire.
+    // L'idéal: On garde la valeur intrinsèque (DP ou DS).
+
+    // Si Source(DP) -> Cible(DP): +MontantSource
+    // Si Source(DP) -> Cible(DS): +MontantSource * Taux
+    // Si Source(DS) -> Cible(DP): +MontantSource / Taux
+    // Si Source(DS) -> Cible(DS): +MontantSource
+
+    double montantCibleDP = montantSrcDP.abs();
+    double montantCibleDS = montantSrcDS.abs();
+
+    // Pour le mouvement crédit, on inverse juste les signes calculés plus haut
+
+    final mvtCredit = Mouvement(
+      date: date.add(const Duration(milliseconds: 1)),
+      libelle: 'Transfert de ${source.libelle}',
+      montantDevisePrincipale: montantCibleDP,
+      montantDeviseSecondaire: montantCibleDS,
+      saisieDevisePrincipale: cible
+          .enDevisePrincipale, // On considère que l'entrée est vue dans la devise du portefeuille
+      typeMouvement: trfType,
+      portefeuille: cible,
+      estSynchronise: false,
+    );
+
+    // Application des changements
+    // Attention: ajouterMouvementAuPortefeuille modifie le state et émet.
+    // Si on l'appelle deux fois de suite rapidement, le 2ème appel risque de se baser sur un state pas encore à jour
+    // si on ne fait pas attention (mais ici c'est synchrone, donc state.voyages est le bon si on réutilise state).
+    // PROBLÈME: ajouterMouvementAuPortefeuille utilise `emit`. Emit est asynchrone pour l'UI mais synchrone pour le cubit state ?
+    // HydratedCubit emit est synchrone.
+    // MAIS, `ajouterMouvementAuPortefeuille` prend `state.voyages`.
+    // Si on appelle 2 fois, le 2ème 'state' sera bien le nouveau.
+
+    // On doit enchainer les appels.
+    // MAIS `ajouterMouvementAuPortefeuille` renvoie void.
+    // Il vaut mieux refaire une logique propre ici pour appliquer les 2 modifs en 1 emit pour être atomique.
+
+    final indexVoyage = state.voyages.indexWhere((v) => v.nom == voyage.nom);
+    if (indexVoyage == -1) return;
+
+    Voyage voyageEnCours = state.voyages[indexVoyage];
+
+    // Mise à jour Source
+    final indexSource = voyageEnCours.portefeuilles.indexWhere(
+      (p) => p.libelle == source.libelle,
+    );
+    List<Portefeuille> ptfList = List.from(voyageEnCours.portefeuilles);
+
+    if (indexSource != -1) {
+      final pSource = ptfList[indexSource];
+      final newMvts = List<Mouvement>.from(pSource.mouvements)..add(mvtDebit);
+      ptfList[indexSource] = pSource.copyWith(mouvements: newMvts);
+    }
+
+    // Mise à jour Cible
+    // Note: Si on a modifié la liste ptfList, on doit ré-indexer ou utiliser l'index s'il est différent
+    final indexCible = ptfList.indexWhere((p) => p.libelle == cible.libelle);
+    if (indexCible != -1) {
+      final pCible = ptfList[indexCible];
+      final newMvts = List<Mouvement>.from(pCible.mouvements)..add(mvtCredit);
+      ptfList[indexCible] = pCible.copyWith(mouvements: newMvts);
+    }
+
+    final voyageMisAJour = voyageEnCours.copyWith(portefeuilles: ptfList);
+    final nouvelleListeVoyages = List<Voyage>.from(state.voyages);
+    nouvelleListeVoyages[indexVoyage] = voyageMisAJour;
+
+    emit(state.copyWith(voyages: nouvelleListeVoyages));
+  }
+
   // --- Logique de Synchronisation Google Sheets ---
 
   Future<bool> synchroniserVoyage(Voyage voyage) async {
@@ -376,24 +520,21 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
     // 1. Fetch Remote Movements (Server Truth)
     final List<Mouvement> remoteMouvements = await _sheetsService
         .fetchMouvements(voyage, sheetName);
-    print(
-      'Synchronisation: Récupéré ${remoteMouvements.length} mouvements distants.',
-    );
+    // print(
+    //   'Synchronisation: Récupéré ${remoteMouvements.length} mouvements distants.',
+    // );
 
-    // 2. Merge Logic (Server Wins)
+    // 2. Merge Logic (Last Write Wins)
     // On groupe les mouvements distants par Date pour une recherche rapide O(1)
-    // On utilise Date.toIso8601String() comme clé unique
     final Map<String, Mouvement> remoteMap = {
       for (var m in remoteMouvements) m.date.toIso8601String(): m,
     };
 
     // On prépare la nouvelle liste de mouvements par portefeuille
-    // Structure intermédiaire: Map<PortefeuilleLibelle, List<Mouvement>>
     final Map<String, List<Mouvement>> mergedPortefeuilles = {
       for (var p in voyage.portefeuilles) p.libelle: [],
     };
 
-    // On suit les mouvements traités pour identifier les "Nouveaux distants"
     final Set<String> processedDates = {};
 
     // PASS 1: Traiter les mouvements LOCAUX
@@ -402,35 +543,52 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
         final dateKey = localM.date.toIso8601String();
         processedDates.add(dateKey);
 
-        if (localM.estSynchronise) {
-          // Cas 1: Mouvement déjà synchronisé auparavant
-          if (remoteMap.containsKey(dateKey)) {
-            // Conflit/Update: Server Wins
-            // Le serveur a une version (peut-être modifiée), on prend celle du serveur
-            // On s'assure de le mettre dans le bon portefeuille (celui indiqué par le serveur)
-            final remoteM = remoteMap[dateKey]!;
-            // Attention: remoteM a son propre 'portefeuille'. Il faut l'ajouter au bon bucket.
-            mergedPortefeuilles[remoteM.portefeuille.libelle]?.add(remoteM);
+        if (remoteMap.containsKey(dateKey)) {
+          // CONFLIT: Le mouvement existe des deux côtés
+          final remoteM = remoteMap[dateKey]!;
+
+          // Comparaison des timestamps (Last Time Stamp Wins)
+          // On ajoute une tolérance ou on compare strictement ? Strictement.
+          // Note: updatedAt est nullable dans le JSON mais required non-null dans l'objet runtime (default to creation).
+
+          // Si Local est plus récent OU égal (on privilégie le local en cas d'égalité pour éviter refresh UI inutile)
+          bool localWins =
+              localM.updatedAt.isAfter(remoteM.updatedAt) ||
+              localM.updatedAt.isAtSameMomentAs(remoteM.updatedAt);
+
+          // Exception: Si on a forcé une suppression locale, on veut s'assurer qu'elle passe
+          // (Normalement couvert par updatedAt récent, mais ceinture et bretelles)
+          if (localM.estMarqueSupprimer && !remoteM.estMarqueSupprimer) {
+            // Si le serveur ne le sait pas encore, c'est que notre suppression est plus récente ou en attente.
+            // On vérifie quand même le timestamp ?
+            // Si le serveur a été mis à jour APRES ma suppression, il a peut-être "restauré" le mvt.
+            // Mais dans le doute, l'intention explicite de suppression locale récente prévaut souvent.
+            // Ici on s'en tient au timestamp.
+          }
+
+          if (localWins) {
+            // GARDER LOCAL
+            // Il sera pushé car s'il est plus récent, c'est qu'on l'a touché (donc estSynchro=false normalement)
+            // Ou si égalité, on garde local.
+            mergedPortefeuilles[p.libelle]?.add(localM);
           } else {
-            // Remote missing: Le mouvement a été supprimé sur le serveur
-            // Action: Delete Local (On ne l'ajoute pas à la liste retournée)
-            print(
-              'Sync: Suppression locale de ${localM.libelle} (absent distant)',
-            );
+            // GARDER REMOTE (Server a une version plus récente)
+            mergedPortefeuilles[remoteM.portefeuille.libelle]?.add(remoteM);
           }
         } else {
-          // Cas 2: Mouvement Local NON Synchronisé (Nouveau ou Modifié localement en attente push)
-          // "Server Wins" policy nuance:
-          // Si le serveur a *aussi* un mouvement à cette date, c'est un conflit d'ID.
-          // C'est rare (collision de timestamp). Si ça arrive, on suppose que c'est le MEME mouvement déjà pushé ailleurs oubien une vraie collision.
-          // Pour simplifier et éviter les doublons: SI remote existe, on prend remote.
-          // SINON, on garde le local pour le push.
-          if (remoteMap.containsKey(dateKey)) {
-            final remoteM = remoteMap[dateKey]!;
-            mergedPortefeuilles[remoteM.portefeuille.libelle]?.add(remoteM);
-            // Le local est écrasé/ignoré car le serveur a la priorité sur ce timestamp
+          // LOCAL EXISTE, REMOTE ABSENT
+          if (localM.estSynchronise) {
+            // Cas: Je suis clean, mais le serveur ne l'a plus.
+            // => Il a été supprimé sur le serveur.
+            // Action: Suppression Locale.
+            // print(
+            //   'Sync: Suppression locale de ${localM.libelle} (absent distant, suppression serveur présumée)',
+            // );
           } else {
-            // Keep Local (sera pushé à l'étape suivante)
+            // Cas: Je ne suis pas synchro (Nouveau ou Modif en attente)
+            // => C'est un NOUVEAU mouvement que je viens de créer (et qui n'est pas encore sur le serveur)
+            // OU un mouvement que j'ai modifié alors qu'il a été supprimé sur le serveur (Revival / Conflict)
+            // Dans le doute ("Revival"), on le garde et on le pushera.
             mergedPortefeuilles[p.libelle]?.add(localM);
           }
         }
@@ -483,7 +641,7 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
     // Si localM estMarqueSupprimer, il est ajouté. Donc il est dans aPusher.
 
     if (aPusher.isNotEmpty) {
-      print('Sync OUT: Envoi de ${aPusher.length} mouvements.');
+      // print('Sync OUT: Envoi de ${aPusher.length} mouvements.');
       await _sheetsService.sendMouvements(
         aPusher,
         sheetName,
@@ -530,8 +688,13 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
 
     // 6. Config Sync
     await _sheetsService.syncVoyageConfig(voyage);
-
+    // print('Synchronisation terminée.');
     return true;
+  }
+
+  // --- Vérification Configuration Distante (Import) ---
+  Future<Voyage?> checkForRemoteConfig(String voyageName) async {
+    return _sheetsService.fetchVoyageConfig(voyageName);
   }
 
   // --- HydratedBloc (Persistance) ---
@@ -546,7 +709,7 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
       return VoyageState(voyages: voyages);
     } catch (e) {
       if (kDebugMode) {
-        print('Erreur lors du parsing JSON pour VoyageState: $e');
+        // print('Erreur lors du parsing JSON pour VoyageState: $e');
       }
       return null;
     }
