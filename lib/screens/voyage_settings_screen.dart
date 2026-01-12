@@ -341,11 +341,116 @@ class _VoyageSettingsScreenState extends State<VoyageSettingsScreen>
 
   // ===== EDIT METHODS - VOYAGE INFO =====
 
-  void _editVoyageDates(BuildContext context, Voyage voyage) {
-    // TODO: Implement date range picker
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Modification des dates à implémenter')),
+  void _editVoyageDates(BuildContext context, Voyage voyage) async {
+    // 1. Find min/max dates from existing movements/transfers
+    DateTime? earliestMovementDate;
+    DateTime? latestMovementDate;
+
+    // Helper to update min/max
+    void checkDate(DateTime date) {
+      if (earliestMovementDate == null ||
+          date.isBefore(earliestMovementDate!)) {
+        earliestMovementDate = date;
+      }
+      if (latestMovementDate == null || date.isAfter(latestMovementDate!)) {
+        latestMovementDate = date;
+      }
+    }
+
+    // Check standard movements in all wallets
+    for (var p in voyage.portefeuilles) {
+      for (var m in p.mouvements) {
+        if (!m.estMarqueSupprimer) {
+          checkDate(m.date);
+        }
+      }
+    }
+
+    // Normalize to midnight to avoid time issues during comparison
+    final minDate = earliestMovementDate != null
+        ? DateTime(
+            earliestMovementDate!.year,
+            earliestMovementDate!.month,
+            earliestMovementDate!.day,
+          )
+        : null;
+    final maxDate = latestMovementDate != null
+        ? DateTime(
+            latestMovementDate!.year,
+            latestMovementDate!.month,
+            latestMovementDate!.day,
+          )
+        : null;
+
+    // 2. Show date picker
+    // Ensure firstDate/lastDate encompass the initial range to avoid assertion errors
+    final DateTime pickerFirstDate = voyage.dateDebut.isBefore(DateTime(2000))
+        ? voyage.dateDebut
+        : DateTime(2000);
+    final DateTime pickerLastDate = voyage.dateFin.isAfter(DateTime(2100))
+        ? voyage.dateFin
+        : DateTime(2100);
+
+    final DateTimeRange? picked = await showDateRangePicker(
+      context: context,
+      initialDateRange: DateTimeRange(
+        start: voyage.dateDebut,
+        end: voyage.dateFin,
+      ),
+      firstDate: pickerFirstDate,
+      lastDate: pickerLastDate,
+      helpText: 'Dates du voyage',
     );
+
+    if (picked != null) {
+      if (!context.mounted) return;
+
+      // 3. Validate constraints
+      if (minDate != null && picked.start.isAfter(minDate)) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Dates invalides'),
+            content: Text(
+              'La date de début ne peut pas être après le premier mouvement enregistré (${DateFormat('dd/MM/yyyy').format(minDate)}).',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+
+      if (maxDate != null && picked.end.isBefore(maxDate)) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Dates invalides'),
+            content: Text(
+              'La date de fin ne peut pas être avant le dernier mouvement enregistré (${DateFormat('dd/MM/yyyy').format(maxDate)}).',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+
+      // 4. Update if valid
+      context.read<VoyageCubit>().updateVoyageInfo(
+        voyage,
+        dateDebut: picked.start,
+        dateFin: picked.end,
+      );
+    }
   }
 
   void _editPrimaryCurrency(BuildContext context, Voyage voyage) {
@@ -366,44 +471,47 @@ class _VoyageSettingsScreenState extends State<VoyageSettingsScreen>
   void _editSecondaryCurrency(BuildContext context, Voyage voyage) {
     showModalBottomSheet(
       context: context,
-      builder: (context) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.currency_exchange),
-            title: const Text('Sélectionner une devise'),
-            onTap: () {
-              Navigator.pop(context); // Close bottom sheet
-              showCurrencyPicker(
-                context: context,
-                showFlag: true,
-                showCurrencyName: true,
-                showCurrencyCode: true,
-                onSelect: (Currency currency) {
-                  context.read<VoyageCubit>().updateVoyageInfo(
-                    voyage,
-                    deviseSecondaire: currency.code,
-                  );
-                },
-              );
-            },
-          ),
-          if (voyage.deviseSecondaire != null)
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
             ListTile(
-              leading: const Icon(Icons.delete, color: Colors.red),
-              title: const Text(
-                'Supprimer la devise secondaire',
-                style: TextStyle(color: Colors.red),
-              ),
+              leading: const Icon(Icons.currency_exchange),
+              title: const Text('Sélectionner une devise'),
               onTap: () {
-                context.read<VoyageCubit>().updateVoyageInfo(
-                  voyage,
-                  deviseSecondaire: null,
+                Navigator.pop(sheetContext); // Close bottom sheet
+                showCurrencyPicker(
+                  context: context,
+                  showFlag: true,
+                  showCurrencyName: true,
+                  showCurrencyCode: true,
+                  onSelect: (Currency currency) {
+                    context.read<VoyageCubit>().updateVoyageInfo(
+                      voyage,
+                      deviseSecondaire: currency.code,
+                    );
+                  },
                 );
-                Navigator.pop(context);
               },
             ),
-        ],
+            if (voyage.deviseSecondaire != null)
+              ListTile(
+                leading: const Icon(Icons.delete, color: Colors.red),
+                title: const Text(
+                  'Supprimer la devise secondaire',
+                  style: TextStyle(color: Colors.red),
+                ),
+                onTap: () {
+                  context.read<VoyageCubit>().updateVoyageInfo(
+                    voyage,
+                    deviseSecondaire: null,
+                    resetDeviseSecondaire: true,
+                  );
+                  Navigator.pop(sheetContext);
+                },
+              ),
+          ],
+        ),
       ),
     );
   }

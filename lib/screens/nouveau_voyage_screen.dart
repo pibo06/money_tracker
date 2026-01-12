@@ -29,20 +29,21 @@ class _NouveauVoyageScreenState extends State<NouveauVoyageScreen> {
 
   // --- Fonctions de sélection de date ---
 
-  Future<void> _selectDate(BuildContext context, bool isStartDate) async {
-    final DateTime? picked = await showDatePicker(
+  Future<void> _selectDateRange(BuildContext context) async {
+    final DateTimeRange? picked = await showDateRangePicker(
       context: context,
-      initialDate: DateTime.now(),
+      initialDateRange: (_dateDebut != null && _dateFin != null)
+          ? DateTimeRange(start: _dateDebut!, end: _dateFin!)
+          : null,
       firstDate: DateTime(2000),
       lastDate: DateTime(2101),
+      helpText: 'Dates du voyage',
     );
+
     if (picked != null) {
       setState(() {
-        if (isStartDate) {
-          _dateDebut = picked;
-        } else {
-          _dateFin = picked;
-        }
+        _dateDebut = picked.start;
+        _dateFin = picked.end;
       });
     }
   }
@@ -116,6 +117,7 @@ class _NouveauVoyageScreenState extends State<NouveauVoyageScreen> {
       if (mounted) Navigator.of(context).pop();
     }
   }
+
   // --- Construction de l'interface ---
 
   @override
@@ -139,16 +141,29 @@ class _NouveauVoyageScreenState extends State<NouveauVoyageScreen> {
               const SizedBox(height: 16),
 
               // 2. Période de séjour
-              _buildDateRow(
-                'Date de début',
-                _dateDebut,
-                () => _selectDate(context, true),
-              ),
-              const SizedBox(height: 16),
-              _buildDateRow(
-                'Date de fin',
-                _dateFin,
-                () => _selectDate(context, false),
+              InkWell(
+                onTap: () => _selectDateRange(context),
+                child: InputDecorator(
+                  decoration: InputDecoration(
+                    labelText: 'Période du voyage',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: const Icon(Icons.date_range),
+                    errorText: _dateDebut == null || _dateFin == null
+                        ? 'Veuillez sélectionner les dates'
+                        : null,
+                  ),
+                  child: Text(
+                    (_dateDebut != null && _dateFin != null)
+                        ? '${MaterialLocalizations.of(context).formatShortDate(_dateDebut!)} - ${MaterialLocalizations.of(context).formatShortDate(_dateFin!)}'
+                        : 'Sélectionner les dates',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: (_dateDebut == null || _dateFin == null)
+                          ? Colors.grey[700]
+                          : Colors.black,
+                    ),
+                  ),
+                ),
               ),
               const SizedBox(height: 24),
 
@@ -253,32 +268,6 @@ class _NouveauVoyageScreenState extends State<NouveauVoyageScreen> {
       keyboardType: keyboardType,
       onSaved: onSaved,
       validator: validator,
-    );
-  }
-
-  // Widget pour la sélection des dates
-  Widget _buildDateRow(String label, DateTime? date, VoidCallback onTap) {
-    final dateFormat = MaterialLocalizations.of(
-      context,
-    ).formatShortDate(date ?? DateTime.now());
-
-    return InkWell(
-      onTap: onTap,
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-          suffixIcon: const Icon(Icons.calendar_today),
-          errorText: date == null ? 'Veuillez sélectionner une date' : null,
-        ),
-        child: Text(
-          date == null ? 'Sélectionner la date' : dateFormat,
-          style: TextStyle(
-            fontSize: 16,
-            color: date == null ? Colors.grey[700] : Colors.black,
-          ),
-        ),
-      ),
     );
   }
 

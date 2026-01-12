@@ -884,7 +884,7 @@ class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<TypeMouvement>(
-                  value: selectedType,
+                  initialValue: selectedType,
                   decoration: const InputDecoration(labelText: 'Catégorie'),
                   items: voyage.typesMouvements.map((type) {
                     return DropdownMenuItem(
@@ -911,11 +911,13 @@ class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
                       lastDate: DateTime(2100),
                     );
                     if (date != null) {
+                      if (!context.mounted) return;
                       final time = await showTimePicker(
                         context: context,
                         initialTime: TimeOfDay.fromDateTime(selectedDate),
                       );
                       if (time != null) {
+                        if (!context.mounted) return;
                         final now = DateTime.now();
                         setState(() {
                           selectedDate = DateTime(

@@ -126,7 +126,7 @@ class _NouveauTransfertScreenState extends State<NouveauTransfertScreen> {
 
                 // Source Wallet
                 DropdownButtonFormField<Portefeuille>(
-                  value: _sourceWallet,
+                  initialValue: _sourceWallet,
                   decoration: const InputDecoration(
                     labelText: 'De (Source)',
                     border: OutlineInputBorder(),
@@ -150,7 +150,7 @@ class _NouveauTransfertScreenState extends State<NouveauTransfertScreen> {
 
                 // Target Wallet
                 DropdownButtonFormField<Portefeuille>(
-                  value: _targetWallet,
+                  initialValue: _targetWallet,
                   decoration: const InputDecoration(
                     labelText: 'Vers (Destination)',
                     border: OutlineInputBorder(),
@@ -192,8 +192,10 @@ class _NouveauTransfertScreenState extends State<NouveauTransfertScreen> {
                   validator: (val) {
                     if (val == null || val.isEmpty) return 'Requis';
                     if (double.tryParse(val) == null) return 'Invalide';
-                    if (double.parse(val) <= 0)
+                    if (double.parse(val) <= 0) {
                       return 'Le montant doit être positif';
+                    }
+
                     return null;
                   },
                 ),

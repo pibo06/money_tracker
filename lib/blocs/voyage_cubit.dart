@@ -94,7 +94,9 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
     DateTime? dateFin,
     String? devisePrincipale,
     String? deviseSecondaire,
+    bool resetDeviseSecondaire = false,
     double? tauxConversion,
+    bool resetTauxConversion = false,
   }) {
     final indexVoyage = state.voyages.indexWhere((v) => v.nom == voyage.nom);
     if (indexVoyage == -1) return;
@@ -105,7 +107,9 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
       dateFin: dateFin,
       devisePrincipale: devisePrincipale,
       deviseSecondaire: deviseSecondaire,
+      resetDeviseSecondaire: resetDeviseSecondaire,
       tauxConversion: tauxConversion,
+      resetTauxConversion: resetTauxConversion,
     );
 
     final nouvelleListeVoyages = List<Voyage>.from(state.voyages);

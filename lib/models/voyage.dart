@@ -32,7 +32,9 @@ class Voyage {
     DateTime? dateFin,
     String? devisePrincipale,
     String? deviseSecondaire,
+    bool resetDeviseSecondaire = false,
     double? tauxConversion,
+    bool resetTauxConversion = false,
     DateTime? configUpdatedAt,
     List<TypeMouvement>? typesMouvements,
     List<Portefeuille>? portefeuilles,
@@ -42,8 +44,12 @@ class Voyage {
       dateDebut: dateDebut ?? this.dateDebut,
       dateFin: dateFin ?? this.dateFin,
       devisePrincipale: devisePrincipale ?? this.devisePrincipale,
-      deviseSecondaire: deviseSecondaire ?? this.deviseSecondaire,
-      tauxConversion: tauxConversion ?? this.tauxConversion,
+      deviseSecondaire: resetDeviseSecondaire
+          ? null
+          : (deviseSecondaire ?? this.deviseSecondaire),
+      tauxConversion: resetTauxConversion
+          ? null
+          : (tauxConversion ?? this.tauxConversion),
       configUpdatedAt: configUpdatedAt ?? this.configUpdatedAt,
       typesMouvements: typesMouvements ?? this.typesMouvements,
       portefeuilles: portefeuilles ?? this.portefeuilles,
