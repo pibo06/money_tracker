@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:money_tracker/models/voyage.dart';
 import 'package:money_tracker/models/portefeuille.dart';
 import 'package:money_tracker/models/mouvement.dart';
 import 'package:money_tracker/models/typemouvement.dart';

@@ -454,7 +454,7 @@ class _VoyageSettingsScreenState extends State<VoyageSettingsScreen>
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: selectedIconName,
+                initialValue: selectedIconName,
                 decoration: const InputDecoration(
                   labelText: 'Icône',
                   border: OutlineInputBorder(),
@@ -523,7 +523,7 @@ class _VoyageSettingsScreenState extends State<VoyageSettingsScreen>
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: selectedIconName,
+                initialValue: selectedIconName,
                 decoration: const InputDecoration(
                   labelText: 'Icône',
                   border: OutlineInputBorder(),
@@ -688,7 +688,7 @@ class _VoyageSettingsScreenState extends State<VoyageSettingsScreen>
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<ModePaiement>(
-                  value: selectedMode,
+                  initialValue: selectedMode,
                   decoration: const InputDecoration(
                     labelText: 'Mode de paiement',
                   ),
@@ -704,7 +704,7 @@ class _VoyageSettingsScreenState extends State<VoyageSettingsScreen>
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<bool>(
-                  value: useMainCurrency,
+                  initialValue: useMainCurrency,
                   decoration: const InputDecoration(labelText: 'Devise'),
                   items: [
                     DropdownMenuItem(
@@ -803,7 +803,7 @@ class _VoyageSettingsScreenState extends State<VoyageSettingsScreen>
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<ModePaiement>(
-                  value: selectedMode,
+                  initialValue: selectedMode,
                   decoration: const InputDecoration(
                     labelText: 'Mode de paiement',
                   ),
@@ -819,7 +819,7 @@ class _VoyageSettingsScreenState extends State<VoyageSettingsScreen>
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<bool>(
-                  value: useMainCurrency,
+                  initialValue: useMainCurrency,
                   decoration: const InputDecoration(labelText: 'Devise'),
                   items: [
                     DropdownMenuItem(
