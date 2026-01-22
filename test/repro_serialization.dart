@@ -12,7 +12,7 @@ import 'package:money_tracker/models/modepaiement.dart'; // Assuming this exists
 // Let's place it in `test/repro_serialization.dart` and hope imports resolve relative to package root.
 
 void main() {
-  print('Starting reproduction test...');
+  // print('Starting reproduction test...');
 
   try {
     // 1. Create dependencies
@@ -45,15 +45,16 @@ void main() {
     // Now we have: Portefeuille -> [Mouvement -> Portefeuille]
     // If Mouvement.toJson() calls Portefeuille.toJson(), which calls [Mouvement.toJson]... BOOM.
 
-    print('Attempting to serialize Portefeuille...');
+    // print('Attempting to serialize Portefeuille...');
     // This should crash with StackOverflowError before the fix
     final jsonMap = portefeuilleUpdated.toJson();
     final jsonString = json.encode(jsonMap);
 
-    print('Serialization successful!');
-    print('JSON length: ${jsonString.length}');
-  } catch (e, stack) {
-    print('Caught error: $e');
-    print(stack);
+    // print('Serialization successful!');
+    // print('JSON length: ${jsonString.length}');
+  } catch (e) {
+    // e, stack)
+    // print('Caught error: $e');
+    // print(stack);
   }
 }

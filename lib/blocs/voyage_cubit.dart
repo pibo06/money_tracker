@@ -427,10 +427,20 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
     double montantSource,
     DateTime date,
   ) {
-    final trfType = voyage.typesMouvements.firstWhere(
+    var trfType = voyage.typesMouvements.firstWhere(
       (t) => t.code == 'TRF',
-      orElse: () => TypeMouvement(code: 'TRF', libelle: 'Transfert Interne'),
+      orElse: () =>
+          const TypeMouvement(code: 'TRF', libelle: 'Transfert Interne'),
     );
+
+    // Ensure icon is correct for current transfer
+    if (trfType.iconName != 'swap_horiz') {
+      trfType = TypeMouvement(
+        code: trfType.code,
+        libelle: trfType.libelle,
+        iconName: 'swap_horiz',
+      );
+    }
 
     // 1. Mouvement Débit (Sortie d'argent de Source)
     // Montant est NÉGATIF
@@ -600,7 +610,7 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
         // print('DECISION: NO OP (Remote config exists but no timestamp?)');
       }
     } catch (e) {
-      print('ERROR Sync Config: $e');
+      // print('ERROR Sync Config: $e');
     }
 
     // 1. Fetch Remote Movements (Server Truth)
@@ -730,7 +740,7 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
       await _sheetsService.sendMouvements(
         aPusher,
         sheetName,
-        voyage.devisePrincipale,
+        voyage, // Passed full voyage object
       );
 
       // 5. Update Local State -> Mark as Synced

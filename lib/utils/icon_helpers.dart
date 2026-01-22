@@ -25,6 +25,7 @@ class IconHelpers {
     'directions_boat': Icons.directions_boat,
     'directions_car': Icons.directions_car,
     'local_activity': Icons.local_activity,
+    'swap_horiz': Icons.swap_horiz,
   };
 
   static IconData getIcon(String? name) {

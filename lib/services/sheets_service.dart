@@ -11,7 +11,7 @@ import '../data/initial_data.dart';
 
 // Constantes pour le Service Account
 const List<String> _scope = [sheets.SheetsApi.spreadsheetsScope];
-const String _service_account_path =
+const String serviceAccountPath =
     'assets/service_account.json'; // Assurez-vous que ce chemin est correct
 
 class SheetsService {
@@ -27,7 +27,7 @@ class SheetsService {
     try {
       // 1. Lire le fichier de clé JSON depuis les assets
       final String serviceAccountJson = await rootBundle.loadString(
-        _service_account_path,
+        serviceAccountPath,
       );
       final serviceAccountCredentials = ServiceAccountCredentials.fromJson(
         serviceAccountJson,
@@ -62,7 +62,7 @@ class SheetsService {
   Future<void> sendMouvements(
     List<Mouvement> mouvements,
     String sheetName,
-    String devisePrincipale,
+    Voyage voyage,
   ) async {
     if (_sheetsApi == null) {
       // print('API Sheets non initialisée. Impossible de synchroniser.');
@@ -125,10 +125,7 @@ class SheetsService {
       } else {
         if (rowIndex != null) {
           // Update
-          final rowData = _createRowData(
-            mouvement: m,
-            devisePrincipale: devisePrincipale,
-          );
+          final rowData = _createRowData(mouvement: m, voyage: voyage);
           toUpdate.add(
             sheets.ValueRange(
               range: '$sheetName!A$rowIndex:I$rowIndex',
@@ -163,7 +160,7 @@ class SheetsService {
     // 2. ADDS (Append) - Batch
     if (toAppend.isNotEmpty) {
       final List<List<Object>> valuesToAppend = toAppend.map((m) {
-        return _createRowData(mouvement: m, devisePrincipale: devisePrincipale);
+        return _createRowData(mouvement: m, voyage: voyage);
       }).toList();
 
       final sheets.ValueRange valueRange = sheets.ValueRange.fromJson({
@@ -414,7 +411,7 @@ class SheetsService {
   /// Formate un objet Mouvement en une liste de valeurs compatible avec une ligne Sheets.
   List<Object> _createRowData({
     required Mouvement mouvement,
-    required String devisePrincipale,
+    required Voyage voyage,
   }) {
     // Les colonnes doivent correspondre à l'ordre dans votre feuille Google Sheets
     // Protection de la date (Clé unique) avec ' pour éviter le reformatage/arrondi par Sheets
@@ -429,8 +426,9 @@ class SheetsService {
           ? 'Dépense'
           : 'Revenu', // Colonne G: Type Opération
       mouvement.portefeuille.enDevisePrincipale
-          ? devisePrincipale
-          : mouvement.portefeuille.libelle, // Colonne H: Devise
+          ? voyage.devisePrincipale
+          : (voyage.deviseSecondaire ??
+                '???'), // Colonne H: Devise Correctement exportée
       mouvement.updatedAt.toIso8601String(), // Colonne I: Updated At
     ];
   }

@@ -875,6 +875,7 @@ class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
                   decoration: const InputDecoration(labelText: 'Libellé'),
                 ),
                 const SizedBox(height: 12),
+                const SizedBox(height: 12),
                 TextField(
                   controller: montantController,
                   decoration: const InputDecoration(labelText: 'Montant'),
@@ -883,19 +884,31 @@ class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<TypeMouvement>(
-                  initialValue: selectedType,
-                  decoration: const InputDecoration(labelText: 'Catégorie'),
-                  items: voyage.typesMouvements.map((type) {
-                    return DropdownMenuItem(
-                      value: type,
-                      child: Text(type.libelle),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() => selectedType = value);
-                  },
-                ),
+                if (mouvement.typeMouvement.code == 'TRF')
+                  InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Catégorie',
+                      border: OutlineInputBorder(),
+                    ),
+                    child: Text(
+                      mouvement.typeMouvement.libelle,
+                      style: const TextStyle(color: Colors.grey),
+                    ),
+                  )
+                else
+                  DropdownButtonFormField<TypeMouvement>(
+                    initialValue: selectedType,
+                    decoration: const InputDecoration(labelText: 'Catégorie'),
+                    items: voyage.typesMouvements.map((type) {
+                      return DropdownMenuItem(
+                        value: type,
+                        child: Text(type.libelle),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() => selectedType = value);
+                    },
+                  ),
                 const SizedBox(height: 12),
                 ListTile(
                   title: const Text('Date'),

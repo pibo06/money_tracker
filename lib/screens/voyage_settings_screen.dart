@@ -284,7 +284,7 @@ class _VoyageSettingsScreenState extends State<VoyageSettingsScreen>
                 final type = voyage.typesMouvements[index];
                 return Card(
                   child: ListTile(
-                    leading: const Icon(Icons.category),
+                    leading: Icon(IconHelpers.getIcon(type.iconName)),
                     title: Text(type.libelle),
                     subtitle: Text('Code: ${type.code}'),
                     trailing: IconButton(

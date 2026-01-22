@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:money_tracker/blocs/voyage_cubit.dart';
@@ -14,6 +15,13 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _hasAutoNavigated = false;
+  Timer? _autoNavTimer;
+
+  @override
+  void dispose() {
+    _autoNavTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +59,7 @@ class _HomeScreenState extends State<HomeScreen> {
           },
         ),
       ),
+
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.of(context).push(
@@ -63,25 +72,21 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _handleAutoNavigation(List<Voyage> voyages) {
+    if (_autoNavTimer != null && _autoNavTimer!.isActive) return;
+
     final now = DateTime.now();
     Voyage? targetVoyage;
 
-    // 1. Chercher un voyage en cours (Date incluse)
-    // On normalise les dates pour ignorer l'heure si besoin, mais ici on compare DateTime direct
+    // 1. Chercher un voyage en cours
     try {
       targetVoyage = voyages.firstWhere((v) {
         final start = v.dateDebut;
-        // On considère la fin jusqu'à la fin de la journée (23h59) si ce n'est pas déjà géré
-        // Mais Voyage.dateFin est un DateTime.
-        // Supposons start <= now <= end
         return now.isAfter(start.subtract(const Duration(days: 1))) &&
             now.isBefore(v.dateFin.add(const Duration(days: 1)));
       });
-    } catch (_) {
-      // Pas de voyage en cours
-    }
+    } catch (_) {}
 
-    // 2. Si pas de voyage en cours, chercher le PROCHAIN voyage
+    // 2. Sinon le prochain
     if (targetVoyage == null) {
       final futureVoyages = voyages
           .where((v) => v.dateDebut.isAfter(now))
@@ -93,17 +98,21 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (targetVoyage != null) {
-      setState(() {
-        _hasAutoNavigated = true;
+      // Démarrer un Timer de 3 secondes
+      _autoNavTimer = Timer(const Duration(seconds: 3), () {
+        if (mounted && !_hasAutoNavigated) {
+          setState(() {
+            _hasAutoNavigated = true;
+          });
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => VoyageDetailsScreen(voyage: targetVoyage!),
+            ),
+          );
+        }
       });
-      // Navigation
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => VoyageDetailsScreen(voyage: targetVoyage!),
-        ),
-      );
     } else {
-      // Validation que l'auto-nav a été checkée même si rien trouvé, pour ne pas retry en boucle inutilement
+      // Rien à faire, on marque juste comme fait pour ne pas re-scanner
       setState(() {
         _hasAutoNavigated = true;
       });
@@ -123,6 +132,14 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         trailing: const Icon(Icons.arrow_forward_ios),
         onTap: () {
+          // Annuler l'auto-navigation si l'utilisateur clique manuellement
+          _autoNavTimer?.cancel();
+          // On peut aussi marquer _hasAutoNavigated = true pour éviter qu'il se relance si on revient ?
+          // Pas strictement nécessaire si le timer est kill, mais plus propre.
+          setState(() {
+            _hasAutoNavigated = true;
+          });
+
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => VoyageDetailsScreen(voyage: voyage),

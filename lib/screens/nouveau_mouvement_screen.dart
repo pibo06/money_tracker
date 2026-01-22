@@ -73,6 +73,11 @@ class _NouveauMouvementScreenState extends State<NouveauMouvementScreen> {
       // Default to first wallet if none provided
       _portefeuilleSelectionne = widget.voyage.portefeuilles.first;
     }
+
+    // Set default currency based on wallet configuration
+    if (_portefeuilleSelectionne != null) {
+      _saisieEnPrincipale = _portefeuilleSelectionne!.enDevisePrincipale;
+    }
   }
 
   @override
@@ -166,6 +171,11 @@ class _NouveauMouvementScreenState extends State<NouveauMouvementScreen> {
         onPageChanged: (index) {
           setState(() {
             _portefeuilleSelectionne = widget.voyage.portefeuilles[index];
+            // Update currency selection based on wallet
+            if (_portefeuilleSelectionne != null) {
+              _saisieEnPrincipale =
+                  _portefeuilleSelectionne!.enDevisePrincipale;
+            }
           });
         },
         itemBuilder: (context, index) {
