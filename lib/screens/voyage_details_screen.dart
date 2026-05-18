@@ -23,6 +23,7 @@ class VoyageDetailsScreen extends StatefulWidget {
 class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
   late PageController _pageController;
   int _currentPage = 0;
+  bool _showAverages = true;
 
   @override
   void initState() {
@@ -371,16 +372,31 @@ class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
               // Dépenses Moyennes (Si voyage commencé)
               if (averageDays > 0 && sortedCategories.isNotEmpty) ...[
                 const Divider(height: 30),
-                Text(
-                  'Dépenses Moyennes ($averageDays j)',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _showAverages ? 'Dépenses Moyennes ($averageDays j)' : 'Dépenses par Catégorie',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(_showAverages ? Icons.calendar_view_day : Icons.calendar_today),
+                      onPressed: () {
+                        setState(() {
+                          _showAverages = !_showAverages;
+                        });
+                      },
+                      tooltip: _showAverages ? 'Voir le total par catégorie' : 'Voir les moyennes journalières',
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
                 ...sortedCategories.map((entry) {
-                  final avg = entry.value / averageDays;
+                  final val = _showAverages ? entry.value / averageDays : entry.value;
+                  final suffix = _showAverages ? '/j' : '';
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Row(
@@ -414,9 +430,25 @@ class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
                             ),
                           ],
                         ),
-                        Text(
-                          '${avg.toStringAsFixed(2)} ${voyage.devisePrincipale}/j',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        Row(
+                          children: [
+                            Text(
+                              '${val.toStringAsFixed(2)} ${voyage.devisePrincipale}$suffix',
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.list, size: 20, color: Colors.blueAccent),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onPressed: () => _showCategoryDetails(
+                                context,
+                                entry.key,
+                                allMovements,
+                                voyage,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -430,12 +462,12 @@ class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'TOTAL estimé',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                    Text(
+                      _showAverages ? 'TOTAL estimé' : 'TOTAL des catégories',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     Text(
-                      '${(sortedCategories.fold(0.0, (sum, e) => sum + e.value) / averageDays).toStringAsFixed(2)} ${voyage.devisePrincipale}/j',
+                      '${(_showAverages ? (sortedCategories.fold(0.0, (sum, e) => sum + e.value) / averageDays) : sortedCategories.fold(0.0, (sum, e) => sum + e.value)).toStringAsFixed(2)} ${voyage.devisePrincipale}${_showAverages ? '/j' : ''}',
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
@@ -510,6 +542,128 @@ class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  void _showCategoryDetails(
+    BuildContext context,
+    String categoryName,
+    List<Mouvement> allMovements,
+    Voyage voyage,
+  ) {
+    final catMovements = allMovements
+        .where((m) => m.typeMouvement.libelle == categoryName)
+        .toList();
+    catMovements.sort((a, b) => b.date.compareTo(a.date));
+
+    final dateFormat = DateFormat('dd/MM/yyyy');
+    final timeFormat = DateFormat('HH:mm');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return FractionallySizedBox(
+          heightFactor: 0.8,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Détails : $categoryName',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: catMovements.isEmpty
+                    ? const Center(child: Text('Aucune dépense'))
+                    : ListView.builder(
+                        itemCount: catMovements.length,
+                        itemBuilder: (context, index) {
+                          final m = catMovements[index];
+                          final dateStr = dateFormat.format(m.date);
+
+                          bool showHeader = false;
+                          if (index == 0) {
+                            showHeader = true;
+                          } else {
+                            final prevDateStr =
+                                dateFormat.format(catMovements[index - 1].date);
+                            if (dateStr != prevDateStr) showHeader = true;
+                          }
+
+                          final montant = m.saisieDevisePrincipale
+                              ? m.montantDevisePrincipale.abs()
+                              : m.montantDeviseSecondaire.abs();
+                          final devise = m.saisieDevisePrincipale
+                              ? voyage.devisePrincipale
+                              : (voyage.deviseSecondaire ??
+                                  voyage.devisePrincipale);
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (showHeader) ...[
+                                if (index > 0) const Divider(thickness: 2),
+                                Container(
+                                  width: double.infinity,
+                                  color: Colors.grey[200],
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 8,
+                                  ),
+                                  child: Text(
+                                    dateStr,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey[800],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              ListTile(
+                                leading: Text(
+                                  timeFormat.format(m.date),
+                                  style: TextStyle(color: Colors.grey[600]),
+                                ),
+                                title: Text(
+                                  m.libelle,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  'Portefeuille : ${m.portefeuille.libelle}',
+                                ),
+                                trailing: Text(
+                                  '${montant.toStringAsFixed(2)} $devise',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.red,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
