@@ -33,6 +33,7 @@ class _NouveauMouvementScreenState extends State<NouveauMouvementScreen> {
 
   // Variables de l'état local du formulaire
   late DateTime _date; // La date de mouvement affichée/modifiée
+  bool _heureModifieeManuellement = false; // Indique si l'utilisateur a forcé une heure
   // ... autres variables .
 
   String _libelle = '';
@@ -110,17 +111,20 @@ class _NouveauMouvementScreenState extends State<NouveauMouvementScreen> {
       // ... (vérification du typeMouvement) ...
 
       // --- Définition de la Date/Heure Finale ---
-      // On prend le jour sélectionné par l'utilisateur et l'heure EXACTE de la saisie (pour l'ordre)
+      // On prend le jour sélectionné par l'utilisateur et l'heure EXACTE de la saisie (pour l'ordre),
+      // sauf si l'utilisateur a explicitement modifié l'heure (saisie a posteriori).
       final DateTime now = DateTime.now();
-      final DateTime dateHeureMouvement = DateTime(
-        _date.year,
-        _date.month,
-        _date.day,
-        now.hour,
-        now.minute,
-        now.second,
-        now.millisecond,
-      );
+      final DateTime dateHeureMouvement = _heureModifieeManuellement
+          ? _date
+          : DateTime(
+              _date.year,
+              _date.month,
+              _date.day,
+              now.hour,
+              now.minute,
+              now.second,
+              now.millisecond,
+            );
       // Détermination des montants pour le Mouvement (inchangé)
       final double montantDP = _saisieEnPrincipale
           ? _montantSaisi
@@ -288,7 +292,7 @@ class _NouveauMouvementScreenState extends State<NouveauMouvementScreen> {
               },
             ),
           ),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
           onChanged: (value) {
             setState(() {
               _montantSaisi = double.tryParse(value) ?? 0.0;
@@ -296,12 +300,13 @@ class _NouveauMouvementScreenState extends State<NouveauMouvementScreen> {
           },
           onSaved: (value) =>
               _montantSaisi = double.tryParse(value ?? '0') ?? 0.0,
-          validator: (value) =>
-              (value == null ||
-                  double.tryParse(value) == null ||
-                  double.parse(value) <= 0)
-              ? 'Montant invalide'
-              : null,
+          validator: (value) {
+            if (value == null || value.isEmpty) return 'Veuillez saisir un montant';
+            final parsedValue = double.tryParse(value);
+            if (parsedValue == null) return 'Montant invalide';
+            if (parsedValue == 0) return 'Le montant ne peut pas être zéro';
+            return null;
+          },
         ),
 
         // Affichage du montant converti (lecture seule)
@@ -351,17 +356,38 @@ class _NouveauMouvementScreenState extends State<NouveauMouvementScreen> {
     );
 
     if (pickedDate != null) {
+      if (!mounted) return;
+      final TimeOfDay? pickedTime = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.fromDateTime(_date),
+      );
+
       setState(() {
-        // On préserve l'heure/minute associées au "dernier mouvement"
-        // pour garder une cohérence d'ordre de saisie si besoin,
-        // même si la sauvegarde finale utilise DateTime.now() pour l'heure.
-        _date = DateTime(
-          pickedDate.year,
-          pickedDate.month,
-          pickedDate.day,
-          _dateDernierMouvement.hour,
-          _dateDernierMouvement.minute,
-        );
+        if (pickedTime != null) {
+          _date = DateTime(
+            pickedDate.year,
+            pickedDate.month,
+            pickedDate.day,
+            pickedTime.hour,
+            pickedTime.minute,
+          );
+          _heureModifieeManuellement = true;
+        } else {
+          // L'utilisateur a changé la date mais annulé l'heure
+          _date = DateTime(
+            pickedDate.year,
+            pickedDate.month,
+            pickedDate.day,
+            _dateDernierMouvement.hour,
+            _dateDernierMouvement.minute,
+          );
+          // Si la date est différente d'aujourd'hui, on considère que c'est a posteriori
+          if (pickedDate.year != now.year ||
+              pickedDate.month != now.month ||
+              pickedDate.day != now.day) {
+            _heureModifieeManuellement = true;
+          }
+        }
       });
     }
   }
@@ -452,7 +478,9 @@ class _NouveauMouvementScreenState extends State<NouveauMouvementScreen> {
                       ListTile(
                         leading: const Icon(Icons.calendar_today),
                         title: Text(
-                          'Date: ${MaterialLocalizations.of(context).formatShortDate(_date)}',
+                          _heureModifieeManuellement
+                              ? 'Date: ${MaterialLocalizations.of(context).formatShortDate(_date)} à ${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(_date))}'
+                              : 'Date: ${MaterialLocalizations.of(context).formatShortDate(_date)}',
                         ),
                         onTap: _selectionnerDate,
                       ),

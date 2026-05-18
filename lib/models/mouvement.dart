@@ -94,7 +94,7 @@ class Mouvement extends Equatable {
     'saisieDevisePrincipale': saisieDevisePrincipale,
     // Les objets imbriqués doivent être sérialisés
     'typeMouvement': typeMouvement.toJson(),
-    'portefeuille': portefeuille.toJson(),
+    'portefeuille': portefeuille.toJson(excludeMouvements: true),
     'estPointe': estPointe,
     'estSynchronise': estSynchronise,
     'estMarqueSupprimer': estMarqueSupprimer,

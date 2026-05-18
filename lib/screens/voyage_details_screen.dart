@@ -589,7 +589,7 @@ class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
                       ),
                     ),
                   Text(
-                    'Dépenses: ${(portefeuille.suiviSolde ? (portefeuille.soldeActuel - portefeuille.soldeDepart) : portefeuille.soldeActuel).abs().toStringAsFixed(2)}',
+                    'Dépenses: ${portefeuille.totalDepenses.toStringAsFixed(2)}',
                     style: TextStyle(
                       fontSize: portefeuille.suiviSolde
                           ? 12

@@ -3,6 +3,7 @@
 // Copyright (c) 2018 Felix Angelov.
 // You can find the original at https://github.com/felangel/bloc.
 
+import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -38,6 +39,15 @@ void main() async {
   }
 }
 
+class AppScrollBehavior extends MaterialScrollBehavior {
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+      };
+}
+
 class MoneyTrackerApp extends StatelessWidget {
   const MoneyTrackerApp({super.key});
 
@@ -49,8 +59,10 @@ class MoneyTrackerApp extends StatelessWidget {
       child: MaterialApp(
         title: 'Money Tracker Voyage',
         theme: ThemeData(primarySwatch: Colors.blue),
+        scrollBehavior: AppScrollBehavior(),
         home: const HomeScreen(),
       ),
     );
   }
 }
+

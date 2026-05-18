@@ -424,7 +424,8 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
     Voyage voyage,
     Portefeuille source,
     Portefeuille cible,
-    double montantSource,
+    double montantSaisi,
+    bool saisieEnDevisePrincipale,
     DateTime date,
   ) {
     var trfType = voyage.typesMouvements.firstWhere(
@@ -447,16 +448,16 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
     double montantSrcDP = 0.0;
     double montantSrcDS = 0.0;
 
-    if (source.enDevisePrincipale) {
-      // Source est en DP
-      montantSrcDP = -montantSource.abs();
-      // On convertit pour DS ( approximatif car on ne sait pas si c'est vraiment utilisé)
+    if (saisieEnDevisePrincipale) {
+      // Saisi en DP
+      montantSrcDP = -montantSaisi.abs();
+      // On convertit pour DS
       if (voyage.tauxConversion != null && voyage.tauxConversion != 0) {
         montantSrcDS = montantSrcDP * voyage.tauxConversion!;
       }
     } else {
-      // Source est en DS
-      montantSrcDS = -montantSource.abs();
+      // Saisi en DS
+      montantSrcDS = -montantSaisi.abs();
       if (voyage.tauxConversion != null && voyage.tauxConversion != 0) {
         montantSrcDP = montantSrcDS / voyage.tauxConversion!;
       }
@@ -467,7 +468,7 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
       libelle: 'Transfert vers ${cible.libelle}',
       montantDevisePrincipale: montantSrcDP,
       montantDeviseSecondaire: montantSrcDS,
-      saisieDevisePrincipale: source.enDevisePrincipale,
+      saisieDevisePrincipale: saisieEnDevisePrincipale,
       typeMouvement: trfType,
       portefeuille: source,
       estSynchronise: false,
@@ -495,8 +496,7 @@ class VoyageCubit extends HydratedCubit<VoyageState> {
       libelle: 'Transfert de ${source.libelle}',
       montantDevisePrincipale: montantCibleDP,
       montantDeviseSecondaire: montantCibleDS,
-      saisieDevisePrincipale: cible
-          .enDevisePrincipale, // On considère que l'entrée est vue dans la devise du portefeuille
+      saisieDevisePrincipale: saisieEnDevisePrincipale,
       typeMouvement: trfType,
       portefeuille: cible,
       estSynchronise: false,

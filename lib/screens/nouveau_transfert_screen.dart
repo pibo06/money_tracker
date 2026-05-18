@@ -25,6 +25,7 @@ class _NouveauTransfertScreenState extends State<NouveauTransfertScreen> {
   Portefeuille? _targetWallet;
   double _montant = 0.0;
   DateTime _date = DateTime.now();
+  bool _saisieEnPrincipale = true;
 
   @override
   void initState() {
@@ -44,6 +45,11 @@ class _NouveauTransfertScreenState extends State<NouveauTransfertScreen> {
         (p) => p != _sourceWallet,
         orElse: () => widget.voyage.portefeuilles[1],
       );
+    }
+    
+    // Par défaut, on utilise la devise du portefeuille source
+    if (_sourceWallet != null) {
+      _saisieEnPrincipale = _sourceWallet!.enDevisePrincipale;
     }
   }
 
@@ -67,6 +73,7 @@ class _NouveauTransfertScreenState extends State<NouveauTransfertScreen> {
         _sourceWallet!,
         _targetWallet!,
         _montant,
+        _saisieEnPrincipale,
         _date,
       );
 
@@ -76,31 +83,22 @@ class _NouveauTransfertScreenState extends State<NouveauTransfertScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Calcul du taux de conversion implicite pour affichage
-    double montantCible = 0.0;
-    String deviseSource = _sourceWallet?.enDevisePrincipale == true
+    // Calcul de la devise de saisie
+    String deviseSaisie = _saisieEnPrincipale
         ? widget.voyage.devisePrincipale
         : (widget.voyage.deviseSecondaire ?? widget.voyage.devisePrincipale);
-    String deviseCible = _targetWallet?.enDevisePrincipale == true
-        ? widget.voyage.devisePrincipale
-        : (widget.voyage.deviseSecondaire ?? widget.voyage.devisePrincipale);
+        
+    String deviseConvertie = _saisieEnPrincipale
+        ? (widget.voyage.deviseSecondaire ?? widget.voyage.devisePrincipale)
+        : widget.voyage.devisePrincipale;
 
-    // Simple estimation convert logic just for display
-    if (_montant > 0 && _sourceWallet != null && _targetWallet != null) {
-      // Cas 1: Même devise
-      if (_sourceWallet!.enDevisePrincipale ==
-          _targetWallet!.enDevisePrincipale) {
-        montantCible = _montant;
-      }
-      // Cas 2: Source DP -> Cible DS
-      else if (_sourceWallet!.enDevisePrincipale &&
-          !_targetWallet!.enDevisePrincipale) {
-        montantCible = _montant * (widget.voyage.tauxConversion ?? 1.0);
-      }
-      // Cas 3: Source DS -> Cible DP
-      else {
+    double montantConverti = 0.0;
+    if (_montant > 0) {
+      if (_saisieEnPrincipale) {
+        montantConverti = _montant * (widget.voyage.tauxConversion ?? 1.0);
+      } else {
         double taux = widget.voyage.tauxConversion ?? 1.0;
-        if (taux != 0) montantCible = _montant / taux;
+        if (taux != 0) montantConverti = _montant / taux;
       }
     }
 
@@ -142,7 +140,13 @@ class _NouveauTransfertScreenState extends State<NouveauTransfertScreen> {
                     );
                   }).toList(),
                   onChanged: (val) {
-                    setState(() => _sourceWallet = val);
+                    setState(() {
+                      _sourceWallet = val;
+                      // Met à jour la devise de saisie par défaut si on change la source
+                      if (val != null) {
+                        _saisieEnPrincipale = val.enDevisePrincipale;
+                      }
+                    });
                   },
                   validator: (v) => v == null ? 'Requis' : null,
                 ),
@@ -175,9 +179,25 @@ class _NouveauTransfertScreenState extends State<NouveauTransfertScreen> {
                 // Montant
                 TextFormField(
                   decoration: InputDecoration(
-                    labelText: 'Montant ($deviseSource)',
+                    labelText: 'Montant ($deviseSaisie)',
                     border: const OutlineInputBorder(),
                     prefixIcon: const Icon(Icons.attach_money),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.swap_horiz),
+                      onPressed: () {
+                        if (widget.voyage.deviseSecondaire != null) {
+                          setState(() => _saisieEnPrincipale = !_saisieEnPrincipale);
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Pas de devise secondaire définie pour ce voyage',
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                    ),
                   ),
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
@@ -199,11 +219,11 @@ class _NouveauTransfertScreenState extends State<NouveauTransfertScreen> {
                     return null;
                   },
                 ),
-                if (_montant > 0 && deviseSource != deviseCible)
+                if (widget.voyage.deviseSecondaire != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: Text(
-                      'Montant reçu estimé: ${montantCible.toStringAsFixed(2)} $deviseCible',
+                      'Conversion: ${montantConverti.toStringAsFixed(2)} $deviseConvertie',
                       style: TextStyle(
                         color: Colors.grey[600],
                         fontStyle: FontStyle.italic,

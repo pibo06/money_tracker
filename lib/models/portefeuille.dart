@@ -33,6 +33,7 @@ class Portefeuille extends Equatable {
     if (!suiviSolde) {
       double totalDepenses = 0.0;
       for (var mouvement in mouvements) {
+        if (mouvement.estMarqueSupprimer) continue;
         if (enDevisePrincipale) {
           totalDepenses += mouvement.montantDevisePrincipale;
         } else {
@@ -49,6 +50,7 @@ class Portefeuille extends Equatable {
     // mais pour le calcul du solde du portefeuille, nous utilisons la devise dans laquelle
     // le portefeuille est défini (enDevisePrincipale).
     for (var mouvement in mouvements) {
+      if (mouvement.estMarqueSupprimer) continue;
       if (enDevisePrincipale) {
         // Si le portefeuille est en Devise Principale, on utilise le montant DP du mouvement
         totalMouvements += mouvement.montantDevisePrincipale;
@@ -59,6 +61,26 @@ class Portefeuille extends Equatable {
     }
 
     return totalMouvements;
+  }
+
+  // --- Propriété Calculée : Total des Dépenses ---
+  
+  double get totalDepenses {
+    double total = 0.0;
+    for (var mouvement in mouvements) {
+      if (mouvement.estMarqueSupprimer) continue;
+      if (mouvement.typeMouvement.code == 'TRF') continue;
+
+      final montant = enDevisePrincipale 
+          ? mouvement.montantDevisePrincipale 
+          : mouvement.montantDeviseSecondaire;
+
+      // On ignore les apports (remboursements) et on ne somme que les dépenses (montant < 0)
+      if (montant < 0) {
+        total += montant;
+      }
+    }
+    return total.abs();
   }
 
   @override
@@ -91,14 +113,14 @@ class Portefeuille extends Equatable {
     );
   }
 
-  Map<String, dynamic> toJson() => {
+  Map<String, dynamic> toJson({bool excludeMouvements = false}) => {
     'libelle': libelle,
     'modePaiement': modePaiement.toJson(),
     'enDevisePrincipale': enDevisePrincipale,
     'suiviSolde': suiviSolde,
     'soldeDepart': soldeDepart,
     // Sérialisation de la liste de mouvements
-    'mouvements': mouvements.map((m) => m.toJson()).toList(),
+    'mouvements': excludeMouvements ? [] : mouvements.map((m) => m.toJson()).toList(),
   };
 
   // --- Immutabilité (copyWith) ---
