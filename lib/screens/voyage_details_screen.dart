@@ -397,60 +397,58 @@ class _VoyageDetailsScreenState extends State<VoyageDetailsScreen> {
                 ...sortedCategories.map((entry) {
                   final val = _showAverages ? entry.value / averageDays : entry.value;
                   final suffix = _showAverages ? '/j' : '';
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            if (voyage.typesMouvements
-                                    .firstWhere((t) => t.libelle == entry.key)
-                                    .iconName !=
-                                null)
-                              Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: Icon(
-                                  IconHelpers.getIcon(
-                                    voyage.typesMouvements
-                                        .firstWhere(
-                                          (t) => t.libelle == entry.key,
-                                        )
-                                        .iconName,
+                  return InkWell(
+                    onTap: () => _showCategoryDetails(
+                      context,
+                      entry.key,
+                      allMovements,
+                      voyage,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              if (voyage.typesMouvements
+                                      .firstWhere((t) => t.libelle == entry.key)
+                                      .iconName !=
+                                  null)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: Icon(
+                                    IconHelpers.getIcon(
+                                      voyage.typesMouvements
+                                          .firstWhere(
+                                            (t) => t.libelle == entry.key,
+                                          )
+                                          .iconName,
+                                    ),
+                                    size: 16,
+                                    color: Colors.grey[700],
                                   ),
-                                  size: 16,
-                                  color: Colors.grey[700],
+                                ),
+                              Text(
+                                entry.key,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
-                            Text(
-                              entry.key,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w500,
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              Text(
+                                '${val.toStringAsFixed(2)} ${voyage.devisePrincipale}$suffix',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
                               ),
-                            ),
-                          ],
-                        ),
-                        Row(
-                          children: [
-                            Text(
-                              '${val.toStringAsFixed(2)} ${voyage.devisePrincipale}$suffix',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(width: 8),
-                            IconButton(
-                              icon: const Icon(Icons.list, size: 20, color: Colors.blueAccent),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              onPressed: () => _showCategoryDetails(
-                                context,
-                                entry.key,
-                                allMovements,
-                                voyage,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                              const SizedBox(width: 8),
+                              const Icon(Icons.list, size: 20, color: Colors.blueAccent),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 }),
